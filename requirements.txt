@@ -1,0 +1,13 @@
+torch==1.8.1
+torchmetrics=0.9.2
+torchvision==0.9.1
+jupyter
+seaborn
+wandb>=0.12.0
+opencv-python
+torch-tb-profiler
+pytest
+pyfakefs
+pycocotools
+flake8
+xmltodict

@@ -1,0 +1,34 @@
+program: train.py
+method: grid
+entity: jpdr
+project: experiments
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
+  - '--use_split_detect_recog'
+parameters:
+  backbone_name:
+    value: resnet50
+  lr:
+    value: 0.01
+  dataset:
+    value: tonioni
+  k_fold_num_folds:
+    value: 5
+  k_fold_seed:
+    value: 15
+  k_fold_val_fold:
+    distribution: categorical
+    values: [0, 1, 2, 3, 4]
+  batch_size_det:
+    value: 2
+  batch_size_recog:
+    value: 2
+  trainable_layers:
+    value: 1
+  num_epochs:
+    value: 500
+  num_workers:
+    value: 10

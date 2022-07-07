@@ -1,0 +1,13 @@
+.venv
+.env
+__pycache__
+.ipynb_checkpoints
+.cache
+.locks
+logs
+wandb
+*.ckpt
+ckpts
+*.pth
+*.pkl
+data

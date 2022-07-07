@@ -1,0 +1,52 @@
+program: train.py
+method: grid
+entity: jpdr
+project: experiments
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
+  - "--use_crop_batch_inputs"
+parameters:
+  backbone_name:
+    value: resnet50
+  crop_box_size:
+    value: 800
+  lr:
+    distribution: categorical
+    values:
+      - 0.001
+      - 0.0025
+      - 0.005
+      - 0.0075
+      - 0.01
+      - 0.025
+      - 0.05
+      - 0.075
+      - 0.1
+      - 0.25
+  dataset:
+    distribution: categorical
+    values:
+      - tankstation
+      - tonioni
+  k_fold_num_folds:
+    value: 5
+  k_fold_seed:
+    values: [15]
+  k_fold_val_fold:
+    distribution: categorical
+    values: [0, 1]
+  crop_box_iou_thresh:
+    value: 0.5
+  batch_size_det:
+    value: 2
+  batch_size_recog:
+    value: 2
+  trainable_layers:
+    value: 1
+  num_epochs:
+    value: 100
+  num_workers:
+    value: 10
