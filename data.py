@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from jpdr.datasets import GroZi3k, Tankstation
+from jpdr.datasets import GroZi3kTonioni, GroZi3kOsokin, Tankstation
 import jpdr.transforms as T
 from torch.utils.data import DataLoader
 
@@ -13,14 +13,31 @@ def get_tonioni_datasets(
     train_tfm, val_tfm
 ):
     data_path = Path(__file__).parent / 'data' / 'GroceryProducts_Tonioni'
-    ds_train = GroZi3k(
+    ds_train = GroZi3kTonioni(
         data_path,
         subset='val_query',
         transform=train_tfm,
     )
-    ds_val = GroZi3k(
+    ds_val = GroZi3kTonioni(
         data_path,
         subset='val_query',
+        transform=val_tfm,
+    )
+    return ds_train, ds_val
+
+
+def get_osokin_datasets(
+    train_tfm, val_tfm
+):
+    data_path = Path(__file__).parent / 'data' / 'GroceryProducts_Osokin'
+    ds_train = GroZi3kOsokin(
+        data_path,
+        subset='all_query',
+        transform=train_tfm,
+    )
+    ds_val = GroZi3kOsokin(
+        data_path,
+        subset='all_query',
         transform=val_tfm,
     )
     return ds_train, ds_val
@@ -46,6 +63,11 @@ def get_tankstation_datasets(
 DATASET_REGISTRY = {
     'tonioni': (
         get_tonioni_datasets,
+        dict(mean=[0.4643, 0.4087, 0.3457],
+             std=[0.2831, 0.2730, 0.2695])
+    ),
+    'osokin': (
+        get_osokin_datasets,
         dict(mean=[0.4643, 0.4087, 0.3457],
              std=[0.2831, 0.2730, 0.2695])
     ),
@@ -154,6 +176,16 @@ def collate_fn_detection(data):
 
 
 def k_fold_trainval_split(ds_train, ds_val, k=5, val_fold=0, seed=15):
+    """
+    Shuffle the data in `ds_train`, split it up into into `k` folds and assign
+    `k-1` folds to the training dataset and 1 fold to the validation dataset.
+    Which fold is used for validation, is determined by `val_fold`. The random
+    state used to shuffle the data is set by `seed`.
+
+    Assumes that `ds_train` and `ds_val` are instances of the same class and
+    initially also contain the same data. The dataframes inside the datasets
+    are changed by this function to contain the train, resp. validation, data.
+    """
     assert val_fold < k
     folds = np.array_split(
         ds_train.df.sample(frac=1.0, random_state=seed),

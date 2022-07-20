@@ -13,6 +13,13 @@ from ..utils.convert_tensor import convert_to_item, convert_to_list
 
 
 class DetectionDataset(Dataset):
+    GALLERY_SUBSETS = [
+        'val_gallery'
+    ]
+    QUERY_SUBSETS = [
+        'val_query'
+    ]
+
     def __init__(
         self,
         data_path: str,
@@ -22,18 +29,21 @@ class DetectionDataset(Dataset):
         super().__init__()
         self._coco = None
         self.init_coco_fields()
-        if subset not in ['val_gallery', 'val_query']:
-            raise ValueError(
-                f'Unsupported subset "{subset}"'
-            )
-
         self.subset = subset
+        self.check_subset()
         self.data_path = Path(data_path)
         self.transform = transform
 
-        gallery_df = self.get_gallery_df()
-        query_df = self.get_query_df()
-        self.label_to_label_idx = get_label_to_label_idx(gallery_df, query_df)
+        all_gallery_df = pd.concat([
+            self.get_gallery_df(subset)
+            for subset in self.GALLERY_SUBSETS
+        ])
+        all_query_df = pd.concat([
+            self.get_query_df(subset)
+            for subset in self.QUERY_SUBSETS
+        ])
+        self.label_to_label_idx = get_label_to_label_idx(all_gallery_df,
+                                                         all_query_df)
 
         # Also add background label with index 0
         self.label_to_label_idx = {
@@ -44,12 +54,15 @@ class DetectionDataset(Dataset):
         assert bg_label not in self.label_to_label_idx
         self.label_to_label_idx[bg_label] = 0
 
-        if self.subset == 'val_gallery':
+        if self.subset in self.GALLERY_SUBSETS:
+            gallery_df = self.get_gallery_df(self.subset)
             gallery_df['product_id'] = gallery_df['product_id'].apply(
                 lambda label: self.label_to_label_idx[label]
             )
             self.df = gallery_df
         else:
+            assert self.subset in self.QUERY_SUBSETS
+            query_df = self.get_query_df(self.subset)
             for _, row in query_df.iterrows():
                 product_ids = torch.tensor([
                     self.label_to_label_idx[label]
@@ -58,6 +71,12 @@ class DetectionDataset(Dataset):
                 row['target']['product_ids'] = product_ids
 
             self.df = query_df
+
+    def check_subset(self):
+        if self.subset not in [*self.QUERY_SUBSETS, *self.GALLERY_SUBSETS]:
+            raise ValueError(
+                f'Unsupported subset "{self.subset}"'
+            )
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
@@ -131,8 +150,8 @@ class DetectionDataset(Dataset):
 
         return coco_ds
 
-    def get_query_df(self):
-        imgs = self.get_query_imgs()
+    def get_query_df(self, subset=None):
+        imgs = self.get_query_imgs(subset)
         df_rows = []
 
         for idx, img in enumerate(imgs):
@@ -146,7 +165,7 @@ class DetectionDataset(Dataset):
                 'width': width,
                 'height': height,
                 'target': {
-                    **self.get_query_img_target(img),
+                    **self.get_query_img_target(img, subset),
                     'image_id': torch.tensor(idx),
                 }
             })

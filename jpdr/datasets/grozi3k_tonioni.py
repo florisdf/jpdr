@@ -8,11 +8,11 @@ from .detection_dataset import DetectionDataset
 import jpdr.utils.boxes as B
 
 
-class GroZi3k(DetectionDataset):
+class GroZi3kTonioni(DetectionDataset):
     def __len__(self):
         return len(self.df)
 
-    def get_gallery_df(self):
+    def get_gallery_df(self, subset=None):
         imgs = get_imgs_from_txt('TrainingFiles.txt', self.data_path)
         assert all(f.exists() for f in imgs)
         img_names = get_img_names_from_txt('TrainingFiles.txt', self.data_path)
@@ -30,18 +30,18 @@ class GroZi3k(DetectionDataset):
 
         return pd.DataFrame(df_rows)
 
-    def get_query_imgs(self):
+    def get_query_imgs(self, subset=None):
         imgs = get_imgs_from_txt('TestFiles.txt', self.data_path)
         assert all(f.exists() for f in imgs)
         return imgs
 
-    def get_query_df(self):
-        df = super().get_query_df()
+    def get_query_df(self, subset=None):
+        df = super().get_query_df(subset)
         return df[
             df['target'].apply(lambda t: 'boxes' in t)
         ].reset_index(drop=True)
 
-    def get_query_img_target(self, img: str):
+    def get_query_img_target(self, img: str, subset=None):
         annot_csv = test_img_to_tonioni_csv(img, self.data_path)
         if not annot_csv.exists():
             return {}
