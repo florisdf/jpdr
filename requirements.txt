@@ -12,3 +12,4 @@ pycocotools
 flake8
 xmltodict
 python-dotenv
+tqdm
