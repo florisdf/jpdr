@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  FDF-app:
+    image: florisdf/jpdr
+    shm_size: '250GB'
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    user: fdf
+    volumes:
+      - ~/:/data/research/fdf
+    cpuset: $CPUS
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - capabilities: [gpu]
