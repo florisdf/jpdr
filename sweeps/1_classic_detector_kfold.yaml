@@ -20,7 +20,7 @@ parameters:
     value: 15
   k_fold_val_fold:
     distribution: categorical
-    values: [0]
+    values: [1, 2, 3, 4]
   batch_size_det:
     value: 2
   batch_size_recog:
