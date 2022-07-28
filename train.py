@@ -56,7 +56,6 @@ def run_training(
 
     # Recognition batch args
     batch_size_recog=2,
-    img_size_recog=224,
     id_embedding_size=512,
 
     # K-Fold args
@@ -349,7 +348,6 @@ if __name__ == '__main__':
 
     # Recognition batch args
     parser.add_argument('--batch_size_recog', default=2, help='', type=int)
-    parser.add_argument('--img_size_recog', default=224, help='', type=int)
     parser.add_argument('--id_embedding_size', default=512, help='', type=int)
 
     # K-Fold args
@@ -456,7 +454,6 @@ if __name__ == '__main__':
 
         # Recognition batch args
         batch_size_recog=args.batch_size_recog,
-        img_size_recog=args.img_size_recog,
         id_embedding_size=args.id_embedding_size,
 
         # K-Fold args
