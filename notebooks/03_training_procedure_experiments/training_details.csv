@@ -1,0 +1,27 @@
+,lr,num_epochs,backbone_name,crop_box_size,k_fold_val_fold,trainable_layers,id_embedding_size,use_crop_batch_inputs,use_split_detect_recog,name
+0,0.01,500,resnet50,,4,1,512,False,False,Proc. 1
+1,0.01,500,resnet50,,3,1,512,False,False,Proc. 1
+2,0.01,500,resnet50,,2,1,512,False,False,Proc. 1
+3,0.01,500,resnet50,,1,1,512,False,False,Proc. 1
+4,0.01,500,resnet50,,0,1,512,False,False,Proc. 1
+5,0.01,500,resnet50,,4,1,512,False,True,Proc. 2
+6,0.01,500,resnet50,,3,1,512,False,True,Proc. 2
+7,0.01,500,resnet50,,2,1,512,False,True,Proc. 2
+8,0.01,500,resnet50,,1,1,512,False,True,Proc. 2
+9,0.01,500,resnet50,,0,1,512,False,True,Proc. 2
+10,0.01,500,resnet50,800,4,1,512,True,False,Proc. 3
+11,0.01,500,resnet50,800,3,1,512,True,False,Proc. 3
+12,0.01,500,resnet50,800,2,1,512,True,False,Proc. 3
+13,0.01,500,resnet50,800,1,1,512,True,False,Proc. 3
+14,0.01,500,resnet50,800,0,1,512,True,False,Proc. 3
+15,0.01,500,resnet50,600,4,1,512,True,False,Proc. 3
+16,0.01,500,resnet50,600,3,1,512,True,False,Proc. 3
+17,0.01,500,resnet50,600,2,1,512,True,False,Proc. 3
+18,0.01,500,resnet50,600,1,1,512,True,False,Proc. 3
+19,0.01,500,resnet50,600,0,1,512,True,False,Proc. 3
+20,0.01,500,resnet50,300,4,1,512,True,False,Proc. 3
+21,0.01,500,resnet50,300,3,1,512,True,False,Proc. 3
+22,0.01,500,resnet50,300,2,1,512,True,False,Proc. 3
+23,0.01,500,resnet50,300,1,1,512,True,False,Proc. 3
+24,0.01,500,resnet50,300,0,1,512,True,False,Proc. 3
+25,0.005,500,resnet50,400,0,1,512,True,False,Proc. 3
