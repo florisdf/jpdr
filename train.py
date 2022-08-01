@@ -39,7 +39,7 @@ def run_training(
     save_best=True,
 
     # Dataset
-    dataset='tankstation',
+    dataset='tonioni',
 
     # RoI args
     roi_output_size=14,
@@ -61,7 +61,7 @@ def run_training(
     # K-Fold args
     k_fold_seed=15,
     k_fold_num_folds=5,
-    k_fold_val_fold=1,
+    k_fold_val_fold=0,
 
     # Loss args
     rpn_box_weight=1.0,
@@ -284,13 +284,6 @@ def run_training(
     training_loop.run()
 
 
-def bool_arg_type(arg):
-    arg_lower = arg.lower()
-    if arg_lower not in ['true', 'false']:
-        raise TypeError(f'Illegal boolean arg value: "{arg}"')
-    return arg_lower == 'true'
-
-
 def int_list_arg_type(arg):
     return [int(s) for s in arg.split(',') if len(s.strip()) > 0]
 
@@ -310,114 +303,255 @@ def crop_box_size_type(arg):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--backbone_name', default='resnet18', help='')
+    parser.add_argument(
+        '--backbone_name', default='resnet18',
+        help=(
+            "Which backbone architecture to use. "
+            "Possible values are 'ResNet', 'resnet18', 'resnet34', "
+            "'resnet50', 'resnet101', 'resnet152', 'resnext50_32x4d', "
+            "'resnext101_32x8d', 'wide_resnet50_2', 'wide_resnet101_2'."
+        )
+    )
 
-    parser.add_argument('--pretrained', default=True, help='',
-                        type=bool_arg_type)
-    parser.add_argument('--trainable_layers', default=1, help='', type=int)
-    parser.add_argument('--load_ckpt', default=None, help='')
-    parser.add_argument('--save_unique', action='store_true', help='')
-    parser.add_argument('--save_best', action='store_true', help='')
-    parser.add_argument('--save_last', action='store_true', help='')
+    parser.add_argument(
+        '--no_pretrained', action='store_true',
+        help='If set, the backbone will be initialized with random weights.',
+    )
+    parser.add_argument(
+        '--trainable_layers', default=1,
+        help='The number of unfrozen backbone layers.',
+        type=int
+    )
+    parser.add_argument(
+        '--load_ckpt', default=None,
+        help='The path to load model checkpoint weights from.'
+    )
+    parser.add_argument(
+        '--save_unique', action='store_true',
+        help=(
+            'If set, the created checkpoint(s) will get a unique name '
+            'containing its WandB run ID.'
+        )
+    )
+    parser.add_argument(
+        '--save_best', action='store_true',
+        help='If set, save a checkpoint containg the weights with the highest '
+        'COCO AP (for the recognition task).'
+    )
+    parser.add_argument(
+        '--save_last', action='store_true',
+        help='If set, save a checkpoint containing the weights of the last '
+        'epoch.'
+    )
 
     # Dataset
-    parser.add_argument('--dataset', default='tankstation', help='')
+    parser.add_argument(
+        '--dataset', default='tonioni',
+        help='The dataset to use for training and validation. '
+        'To add your own dataset, add it to the `DATASET_REGISTRY` '
+        'in `data.py`. See `data.py` for more details.'
+    )
 
     # RoI args
-    parser.add_argument('--roi_output_size', default=14, help='', type=int)
-    parser.add_argument('--box_head_out_channels', default=1024, help='',
-                        type=int)
-    parser.add_argument('--box_fg_iou_thresh', default=0.5, help='',
-                        type=float)
-    parser.add_argument('--box_bg_iou_thresh', default=0.5, help='',
-                        type=float)
-    parser.add_argument('--box_score_thresh', default=0.05, help='',
-                        type=float)
-    parser.add_argument('--box_nms_thresh', default=0.5, help='',
-                        type=float)
-    parser.add_argument('--box_detections_per_img', default=100, help='',
-                        type=float)
+    parser.add_argument(
+        '--roi_output_size', default=14,
+        help='The output size of the feature maps after RoI pooling.',
+        type=int
+    )
+    parser.add_argument(
+        '--box_head_out_channels', default=1024,
+        help='The number of dimensions in the RoI embedding '
+        '(i.e., the size of the vector to which the RoI feature map is '
+        'transformed).',
+        type=int
+    )
+    parser.add_argument(
+        '--box_fg_iou_thresh', default=0.5,
+        help='The minimum IoU between the proposals and the GT box so that '
+        'they can be considered as positive during training of the '
+        'classification head.',
+        type=float
+    )
+    parser.add_argument(
+        '--box_bg_iou_thresh', default=0.5,
+        help='The maximum IoU between the proposals and the GT box so that '
+        'they can be considered as negative during training of the '
+        'classification head.',
+        type=float
+    )
+    parser.add_argument(
+        '--box_score_thresh', default=0.05,
+        help='During inference, only return proposals with a classification '
+        'score greater than `box_score_thresh`.',
+        type=float
+    )
+    parser.add_argument(
+        '--box_nms_thresh', default=0.5,
+        help='NMS threshold for the prediction head during inference.',
+        type=float
+    )
+    parser.add_argument(
+        '--box_detections_per_img', default=100,
+        help='Maximum number of detections per image.',
+        type=float
+    )
 
     # Anchor
-    parser.add_argument('--featmap_names', default='0,1,2,3', help='',
-                        type=str_list_arg_type)
+    parser.add_argument(
+        '--featmap_names', default='0,1,2,3',
+        help='The names of the feature maps (in the ordered dict of feature '
+        'maps returned by the backbone) that will be used for pooling. '
+        'If the backbone is not an FPN and simply returns a tensor '
+        "(i.e. only a single feature map), set `featmap_names` to `['0']`.",
+        type=str_list_arg_type
+    )
 
     # Detection batch args
-    parser.add_argument('--batch_size_det', default=2, help='', type=int)
-    parser.add_argument('--img_size_det', default=800, help='', type=int)
+    parser.add_argument(
+        '--batch_size_det', default=2,
+        help='Batch size to use for detection training.',
+        type=int
+    )
+    parser.add_argument(
+        '--img_size_det', default=800,
+        help='Image size to use for detection training.',
+        type=int
+    )
 
     # Recognition batch args
-    parser.add_argument('--batch_size_recog', default=2, help='', type=int)
-    parser.add_argument('--id_embedding_size', default=512, help='', type=int)
+    parser.add_argument(
+        '--batch_size_recog', default=2,
+        help='Batch size to use for recognition training.',
+        type=int
+    )
+    parser.add_argument(
+        '--id_embedding_size', default=512,
+        help='Length of the recognition embedding vector.',
+        type=int
+    )
 
     # K-Fold args
-    parser.add_argument('--k_fold_seed', default=15, help='', type=int)
-    parser.add_argument('--k_fold_num_folds', default=5, help='', type=int)
-    parser.add_argument('--k_fold_val_fold', default=1, help='', type=int)
+    parser.add_argument(
+        '--k_fold_seed', default=15,
+        help='Seed for the dataset shuffle used to create the K folds.',
+        type=int
+    )
+    parser.add_argument(
+        '--k_fold_num_folds', default=5,
+        help='The number of folds to use.',
+        type=int
+    )
+    parser.add_argument(
+        '--k_fold_val_fold', default=0,
+        help='The index of the validation fold. '
+        'Should be a value between 0 and k - 1.',
+        type=int
+    )
 
     # Loss args
-    parser.add_argument('--rpn_box_weight', default=1, help='', type=float)
-    parser.add_argument('--rpn_objectness_weight', default=1, help='',
-                        type=float)
-    parser.add_argument('--roi_box_weight', default=1, help='', type=float)
-    parser.add_argument('--roi_classifier_weight', default=1, help='',
-                        type=float)
-    parser.add_argument('--roi_recognition_weight', default=1, help='',
-                        type=float)
+    parser.add_argument(
+        '--rpn_box_weight', default=1,
+        help='Relative weight of the RPN box regression loss.',
+        type=float
+    )
+    parser.add_argument(
+        '--rpn_objectness_weight', default=1,
+        help='Relative weight of the RPN objectness loss.',
+        type=float
+    )
+    parser.add_argument(
+        '--roi_box_weight', default=1,
+        help='Relative weight of the box regression loss.',
+        type=float
+    )
+    parser.add_argument(
+        '--roi_classifier_weight', default=1,
+        help='Relative weight of the binary classification loss.',
+        type=float
+    )
+    parser.add_argument(
+        '--roi_recognition_weight', default=1,
+        help='Relative weight of the recognition loss.',
+        type=float
+    )
 
     # Dataloader args
-    parser.add_argument('--num_workers', default=8, help='', type=int)
+    parser.add_argument(
+        '--num_workers', default=8,
+        help='The number of workers to use for data loading.',
+        type=int
+    )
 
     # Optimizer args
-    parser.add_argument('--lr', default=0.01, help='', type=float)
-
-    # Context remover training args
-    parser.add_argument('--max_ctx_remover_train_crops', default=128, help='',
-                        type=int)
-    parser.add_argument('--max_ctx_remover_train_crop_size', default=256,
-                        help='', type=int)
-    parser.add_argument('--ctx_remover_weight', default=1.0, help='',
+    parser.add_argument('--lr', default=0.01, help='The learning rate.',
                         type=float)
-    parser.add_argument('--use_ctx_remover', action='store_true', help='')
 
     # Train args
-    parser.add_argument('--num_epochs', default=30, help='', type=int)
+    parser.add_argument(
+        '--num_epochs', default=30,
+        help='The number of epochs to train.',
+        type=int
+    )
 
     # Log args
-    parser.add_argument('--wandb_entity', default='jpdr', help='')
-    parser.add_argument('--wandb_project',
-                        default='toy_train_separate_forward',
-                        help='')
+    parser.add_argument(
+        '--wandb_entity', help='Weights and Biases entity.'
+    )
+    parser.add_argument(
+        '--wandb_project', help='Weights and Biases project.'
+    )
 
     # Val batch args
-    parser.add_argument('--val_batch_size', default=2, help='', type=int)
+    parser.add_argument('--val_batch_size', default=2,
+                        help='The validation batch size.', type=int)
 
     # Device arg
-    parser.add_argument('--device', default='cuda', help='')
-
-    # Use separate detector and recognizer (baseline)
-    parser.add_argument('--use_two_models', action='store_true', help='')
+    parser.add_argument('--device', default='cuda',
+                        help='The device (cuda/cpu) to use.')
 
     # Split detection and recognition passes
-    parser.add_argument('--use_split_detect_recog',
-                        action='store_true', help='')
+    parser.add_argument(
+        '--use_split_detect_recog',
+        action='store_true',
+        help='If set, use training procedure 2: "Two-phase training".'
+    )
 
     # Recognition crop box args
-    parser.add_argument('--use_crop_batch_inputs',
-                        action='store_true', help='')
-    parser.add_argument('--crop_box_size', default=800, help='',
-                        type=crop_box_size_type)
-    parser.add_argument('--crop_box_iou_thresh', default=0.5, help='',
-                        type=float)
-    parser.add_argument('--crop_box_max_rand_shift', default=0,
-                        help='', type=int)
-    parser.add_argument('--crop_box_max_out_pct', default=0.5, help='',
-                        type=float)
-    parser.add_argument('--crop_box_min_tgt_area_pct', default=0.5, help='',
-                        type=float)
-
-    # Task-specific training args
-    parser.add_argument('--use_task_specific', action='store_true', help='')
+    parser.add_argument(
+        '--use_crop_batch_inputs',
+        action='store_true',
+        help='If set, use training procedure 3: "Crop-batch training".'
+    )
+    parser.add_argument(
+        '--crop_box_size', default=800,
+        help='The size of the crop boxes to use for Proc. 3.',
+        type=crop_box_size_type
+    )
+    parser.add_argument(
+        '--crop_box_iou_thresh', default=0.5,
+        help='When crop boxes overlap more than this amount, only one of '
+        'them will be kept.',
+        type=float
+    )
+    parser.add_argument(
+        '--crop_box_max_rand_shift', default=0,
+        help='Set this to a nonzero value to add random shift to the '
+        'crop boxes.',
+        type=int
+    )
+    parser.add_argument(
+        '--crop_box_max_out_pct', default=0.5,
+        help='When a crop boxes falls outside the image with more than this '
+        'amount, the crop box will not be used.',
+        type=float
+    )
+    parser.add_argument(
+        '--crop_box_min_tgt_area_pct', default=0.5,
+        help='If the target (read: product) that belongs to a crop box has '
+        'less than this relative amount of its area inside the crop box, '
+        'then that crop box will be discarded.',
+        type=float
+    )
 
     args = parser.parse_args()
 
@@ -426,7 +560,7 @@ if __name__ == '__main__':
     run_training(
         # Model args
         backbone_name=args.backbone_name,
-        pretrained=args.pretrained,
+        pretrained=not args.no_pretrained,
         trainable_layers=args.trainable_layers,
         load_ckpt=args.load_ckpt,
         save_unique=args.save_unique,
@@ -483,9 +617,6 @@ if __name__ == '__main__':
         # Device arg
         device=args.device,
 
-        # Use separate detector and recognizer (baseline)
-        use_two_models=args.use_two_models,
-
         # Split detection and recognition passes
         use_split_detect_recog=args.use_split_detect_recog,
 
@@ -496,13 +627,4 @@ if __name__ == '__main__':
         crop_box_max_rand_shift=args.crop_box_max_rand_shift,
         crop_box_max_out_pct=args.crop_box_max_out_pct,
         crop_box_min_tgt_area_pct=args.crop_box_min_tgt_area_pct,
-
-        # Task-specific training args
-        use_task_specific=args.use_task_specific,
-
-        # Context remover training args
-        use_ctx_remover=args.use_ctx_remover,
-        max_ctx_remover_train_crops=args.max_ctx_remover_train_crops,
-        max_ctx_remover_train_crop_size=args.max_ctx_remover_train_crop_size,
-        ctx_remover_weight=args.ctx_remover_weight,
     )
