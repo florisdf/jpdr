@@ -301,7 +301,9 @@ def crop_box_size_type(arg):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
 
     parser.add_argument(
         '--backbone_name', default='resnet18',
@@ -488,7 +490,7 @@ if __name__ == '__main__':
 
     # Train args
     parser.add_argument(
-        '--num_epochs', default=30,
+        '--num_epochs', default=500,
         help='The number of epochs to train.',
         type=int
     )
