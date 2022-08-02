@@ -1,5 +1,5 @@
 import pytest  # noqa
-from jpdr.datasets import GroZi3k
+from jpdr.datasets import GroZi3kTonioni as GroZi3k
 from jpdr.metrics.coco_detection import COCO
 
 import copy
