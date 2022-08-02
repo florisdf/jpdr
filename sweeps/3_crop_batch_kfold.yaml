@@ -15,19 +15,19 @@ parameters:
   backbone_name:
     value: resnet50
   lr:
-    value: 0.005
+    value: 0.01
   dataset:
-    value: osokin
+    value: tonioni
   crop_box_size:
     distribution: categorical
-    values: [250]
+    values: [300, 400, 600, 800]
   k_fold_num_folds:
     value: 5
   k_fold_seed:
     value: 15
   k_fold_val_fold:
     distribution: categorical
-    values: [1, 2, 3, 4]
+    values: [0, 1, 2, 3, 4]
   batch_size_det:
     value: 2
   batch_size_recog:
