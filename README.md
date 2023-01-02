@@ -1,6 +1,6 @@
 # Joint Training of Product Detection and Recognition using Task-Specific Datasets
 
-This is the codebase used for our BMVC submission (paper ID 582).
+This is the codebase used for our VISAPP 2023 submission (paper 189).
 
 ## Installing the project requirements
 
