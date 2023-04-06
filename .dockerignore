@@ -1,0 +1,11 @@
+__pycache__
+.*
+data
+ckpts
+imgs
+notebooks
+jpdr
+wandb
+sweeps
+tests
+training
