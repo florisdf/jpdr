@@ -3,4 +3,4 @@ resources:
   resource_pool: gpu
   slots: 1
 environment:
-  image: florisdf/apollo:latest
+  image: florisdf/jpdr:latest
