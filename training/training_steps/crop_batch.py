@@ -71,7 +71,7 @@ def create_crop_batch(
     Args:
         crop_box_max_out_pct (float): If a crop box lies outside the image more
             than this relative amount of its area, it will be discarded.
-        min_tgt_area_pc (float): If, after cropping, a target has lost more
+        min_tgt_area_pct (float): If, after cropping, a target has lost more
             than this relative amount of its area, it will be discarded.
     """
     crop_boxes = get_crop_boxes_from_targets(
