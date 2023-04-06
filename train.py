@@ -555,6 +555,12 @@ if __name__ == '__main__':
         type=float
     )
 
+    parser.add_argument(
+        '--use_task_specific',
+        action='store_true',
+        help='If set, use training procedure 4: "Task-specific training".'
+    )
+
     args = parser.parse_args()
 
     wandb.init(entity=args.wandb_entity, project=args.wandb_project,
@@ -629,4 +635,7 @@ if __name__ == '__main__':
         crop_box_max_rand_shift=args.crop_box_max_rand_shift,
         crop_box_max_out_pct=args.crop_box_max_out_pct,
         crop_box_min_tgt_area_pct=args.crop_box_min_tgt_area_pct,
+
+        # Task-specific args
+        use_task_specific=args.use_task_specific,
     )
