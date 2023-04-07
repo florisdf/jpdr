@@ -36,23 +36,17 @@ def crop_and_batch_boxes(x, crop_boxes, targets=None,
         ignore_targets = False
 
     for img, tgt, img_crop_boxes in zip(x, targets, crop_boxes):
+        img_crop_boxes = img_crop_boxes.clone()
         if len(img_crop_boxes) == 0:
             continue
         boxes_boundary = B.get_boxes_boundary(img_crop_boxes)
         padding = get_padding_to_fit_box(img, boxes_boundary)
-        img, tgt = T.pad(img, tgt, padding)
+        img, tgt = T.pad(img, copy_target(tgt), padding)
         img_crop_boxes[:, 0::2] += padding[0]
         img_crop_boxes[:, 1::2] += padding[1]
 
         for crop_box in img_crop_boxes.int():
-            if tgt is not None:
-                tgt_copy = {
-                    k: v.clone() if isinstance(v, torch.Tensor)
-                    else copy(v)
-                    for k, v in tgt.items()
-                }
-            else:
-                tgt_copy = None
+            tgt_copy = copy_target(tgt)
             crop, new_tgt = T.crop(img, tgt_copy,
                                    top=crop_box[1],
                                    left=crop_box[0],
@@ -78,6 +72,18 @@ def crop_and_batch_boxes(x, crop_boxes, targets=None,
     crops = torch.stack(crops, dim=0)
 
     return (crops, crop_tgts) if not ignore_targets else crops
+
+
+def copy_target(tgt):
+    if tgt is not None:
+        tgt_copy = {
+            k: v.clone() if isinstance(v, torch.Tensor)
+            else copy(v)
+            for k, v in tgt.items()
+        }
+    else:
+        tgt_copy = None
+    return tgt_copy
 
 
 def pad_to_fit_boxes(img, target, boxes):
