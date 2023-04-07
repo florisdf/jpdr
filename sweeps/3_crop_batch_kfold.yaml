@@ -8,14 +8,11 @@ command:
   - ${program}
   - ${args}
   - '--use_crop_batch_inputs'
-  - '--save_unique'
-  - '--save_last'
-  - '--save_best'
 parameters:
   backbone_name:
     value: resnet50
   lr:
-    value: 0.01
+    value: 0.005
   dataset:
     value: tonioni
   crop_box_size:
@@ -37,4 +34,4 @@ parameters:
   num_epochs:
     value: 500
   num_workers:
-    value: 10
+    value: 4

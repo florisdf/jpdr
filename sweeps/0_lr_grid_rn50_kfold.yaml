@@ -49,4 +49,4 @@ parameters:
   num_epochs:
     value: 100
   num_workers:
-    value: 10
+    value: 4

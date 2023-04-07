@@ -8,14 +8,11 @@ command:
   - ${program}
   - ${args}
   - '--use_split_detect_recog'
-  - '--save_unique'
-  - '--save_last'
-  - '--save_best'
 parameters:
   backbone_name:
     value: resnet50
   lr:
-    value: 0.01
+    value: 0.005
   dataset:
     value: tonioni
   k_fold_num_folds:
@@ -34,4 +31,4 @@ parameters:
   num_epochs:
     value: 500
   num_workers:
-    value: 10
+    value: 4
