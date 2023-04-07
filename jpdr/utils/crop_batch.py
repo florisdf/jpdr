@@ -92,7 +92,12 @@ def pad_to_fit_boxes(img, target, boxes):
 
 
 def pad_to_fit_box(img, target, box):
-    padding = get_padding_to_fit_box(img, box)
+    [left, top, right, bottom] = get_padding_to_fit_box(img, box)
+
+    left, right = equalize_padding(left, right)
+    top, bottom = equalize_padding(top, bottom)
+
+    padding = [left, top, right, bottom]
     img, target = T.pad(img, target, padding)
     return img, target
 
@@ -111,9 +116,6 @@ def get_padding_to_fit_box(img, box):
     pad_top = max(0, -min_y)
     pad_right = max(0, max_x - im_width)
     pad_bottom = max(0, max_y - im_height)
-
-    pad_left, pad_right = equalize_padding(pad_left, pad_right)
-    pad_top, pad_bottom = equalize_padding(pad_top, pad_bottom)
 
     return [pad_left, pad_top, pad_right, pad_bottom]
 
