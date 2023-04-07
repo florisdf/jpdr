@@ -12,8 +12,7 @@ parameters:
   backbone_name:
     value: resnet50
   lr:
-    distribution: categorical
-    values: [0.005, 0.001, 0.0075]
+    value: 0.005
   dataset:
     value: tonioni
   k_fold_num_folds:

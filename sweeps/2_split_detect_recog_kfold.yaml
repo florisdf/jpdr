@@ -15,7 +15,7 @@ parameters:
   backbone_name:
     value: resnet50
   lr:
-    value: 0.01
+    value: 0.005
   dataset:
     value: tonioni
   k_fold_num_folds:
