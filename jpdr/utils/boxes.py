@@ -123,16 +123,7 @@ def make_image_list_boxes_batchable(
     batchable_boxes = make_boxes_batchable(
         stacked_boxes, *args, **kwargs
     )
-    return [
-        batchable_boxes[
-            slice(
-                (num_boxes_per_img[i - 1] if i > 0 else 0),
-                num_boxes_per_img[i]
-            ),
-            :
-        ]
-        for i in range(len(num_boxes_per_img))
-    ]
+    return torch.split(batchable_boxes, num_boxes_per_img)
 
 
 def create_batchable_boxes_from_width_height_centers(
