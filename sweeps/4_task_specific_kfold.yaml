@@ -31,4 +31,4 @@ parameters:
   num_epochs:
     value: 500
   num_workers:
-    value: 2
+    value: 4
