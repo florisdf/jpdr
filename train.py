@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 from torch.optim import SGD
 from torchvision.models import resnet
+from torchvision.models._utils import IntermediateLayerGetter
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 import wandb
 
@@ -48,7 +49,8 @@ def run_training(
     box_fg_iou_thresh=0.5, box_bg_iou_thresh=0.5,
 
     # Anchor
-    featmap_names=None,
+    featmap_names_detect=None,
+    featmap_names_recog=None,
     anchor_sizes=None,
     use_fpn=True,
 
@@ -163,15 +165,20 @@ def run_training(
         'cuda' if device == 'cuda' and torch.cuda.is_available() else 'cpu'
     )
 
-    if featmap_names is None:
-        featmap_names = (
+    if featmap_names_detect is None:
+        featmap_names_detect = (
             ['0', '1', '2', '3'] if use_fpn
-            else ['0']
+            else ['3']
+        )
+    if featmap_names_recog is None:
+        featmap_names_recog = (
+            ['0', '1', '2', '3'] if use_fpn
+            else ['3']
         )
     if anchor_sizes is None:
         anchor_sizes = (
-            ((32,), (64,), (128,), (256,), (512,)) if use_fpn
-            else ((32, 64, 128, 256, 512),)
+            [[32], [64], [128], [256], [512]] if use_fpn
+            else [[32, 64, 128, 256, 512]]
         )
 
     if use_fpn:
@@ -180,10 +187,8 @@ def run_training(
             pretrained=pretrained,
             trainable_layers=trainable_layers
         )
-        backbone_out_channels = backbone.out_channels
     else:
         backbone = resnet.__dict__[backbone_name](pretrained=pretrained)
-        backbone_out_channels = backbone.fc.in_features
         freeze_layers(backbone, trainable_layers)
         backbone = torch.nn.Sequential(
             OrderedDict([
@@ -191,11 +196,27 @@ def run_training(
             ])
         )
 
+        # Let the backbone return an OrderedDict with all intermediate feature
+        # maps, so that both the detection and recognition branch can choose
+        # which feature map to use
+        returned_layers = [1, 2, 3, 4]
+        return_layers = {
+            f'layer{k}': str(v) for v, k in enumerate(returned_layers)
+        }
+        backbone = IntermediateLayerGetter(backbone,
+                                           return_layers=return_layers)
+
+    test_out = backbone(torch.randn((1, 3, 224, 224)))
+    detect_out_channels = test_out[featmap_names_detect[0]].shape[1]
+    recog_out_channels = test_out[featmap_names_recog[0]].shape[1]
+
     model = JointRCNN(
         backbone=backbone,
-        backbone_out_channels=backbone_out_channels,
+        detect_out_channels=detect_out_channels,
+        recog_out_channels=recog_out_channels,
         anchor_sizes=anchor_sizes,
-        featmap_names=featmap_names,
+        featmap_names_detect=featmap_names_detect,
+        featmap_names_recog=featmap_names_recog,
         box_head_out_channels=box_head_out_channels,
         id_embedding_size=id_embedding_size,
         recog_loss_fn=recog_loss_fn,
@@ -440,11 +461,15 @@ if __name__ == '__main__':
 
     # Anchor
     parser.add_argument(
-        '--featmap_names', default=None,
+        '--featmap_names_detect', default=None,
         help='The names of the feature maps (in the ordered dict of feature '
-        'maps returned by the backbone) that will be used for pooling. '
-        'If the backbone is not an FPN and simply returns a tensor '
-        "(i.e. only a single feature map), set `featmap_names` to `['0']`.",
+        'maps returned by the backbone) that will be used for pooling in the '
+        'detection branch.',
+        type=lambda x: x if x is None else str_list_arg_type(x)
+    )
+    parser.add_argument(
+        '--featmap_names_recog', default=None,
+        help='Same as `featmap_names_detect` but for the recognition branch.',
         type=lambda x: x if x is None else str_list_arg_type(x)
     )
     parser.add_argument(
@@ -642,7 +667,8 @@ if __name__ == '__main__':
         box_detections_per_img=args.box_detections_per_img,
 
         # Anchor
-        featmap_names=args.featmap_names,
+        featmap_names_detect=args.featmap_names_detect,
+        featmap_names_recog=args.featmap_names_recog,
         use_fpn=not args.no_use_fpn,
 
         # Detection batch args

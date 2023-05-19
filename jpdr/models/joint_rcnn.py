@@ -18,9 +18,11 @@ class JointRCNN(nn.Module):
     def __init__(
         self,
         backbone: nn.Module,
-        backbone_out_channels: int,
+        detect_out_channels: int,
+        recog_out_channels: int,
         anchor_sizes: Tuple[Tuple[int]],
-        featmap_names: List[str],
+        featmap_names_detect: List[str],
+        featmap_names_recog: List[str],
         box_head_out_channels: int,
         id_embedding_size,
         recog_loss_fn,
@@ -48,18 +50,20 @@ class JointRCNN(nn.Module):
                 input and returns a batch of feature maps for the RPN. The RPN
                 regions are then 'cropped' out of the feature maps (with RoI
                 pooling) and passed through the RoI heads.
-            backbone_out_channels: The number of output channels in the feature
-                map extracted by the backbone.
+            detect_out_channels: The number of output channels in the feature
+                map extracted by the backbone for the detection branch.
+            recog_out_channels: The number of output channels in the feature
+                map extracted by the backbone for the recognition branch.
             box_head_out_channels (int): The number of output channels of the
                 box head.
             anchor_sizes: For backbones without FPN, use e.g. `((32, 64, 128,
                 256, 512),)`. For backbone with FPN, use e.g. `((32,), (64,),
                 (128,), (256,), (512,))`.
-            featmap_names: The names of the feature maps (in the ordered dict
-                of feature maps returned by the backbone) that will be used for
-                pooling. If the backbone is not an FPN and simply returns a
-                tensor (i.e. only a single feature map), set `featmap_names` to
-                `['0']`.
+            featmap_names_detect: The names of the feature maps (in the ordered
+                dict of feature maps returned by the backbone) that will be
+                used for pooling in the detection branch.
+            featmap_names_recog: Same as `featmap_names_detect` but for the
+                recognition branch.
             use_recog_loss_on_forward: If True, compute the recognition loss
                 when forwarding. The passed-in targets should contain
                 `product_ids`.
@@ -73,7 +77,7 @@ class JointRCNN(nn.Module):
                 anchor_sizes, aspect_ratios
         )
         rpn_head = RPNHead(
-            backbone_out_channels,
+            detect_out_channels,
             rpn_anchor_generator.num_anchors_per_location()[0]
         )
 
@@ -91,8 +95,12 @@ class JointRCNN(nn.Module):
         )
 
         # Box head
-        box_head = TwoMLPHead(
-            backbone_out_channels * roi_output_size ** 2,
+        box_head_detect = TwoMLPHead(
+            detect_out_channels * roi_output_size ** 2,
+            box_head_out_channels
+        )
+        box_head_recog = TwoMLPHead(
+            recog_out_channels * roi_output_size ** 2,
             box_head_out_channels
         )
 
@@ -101,14 +109,24 @@ class JointRCNN(nn.Module):
                                                 id_embedding_size,
                                                 num_classes=box_num_classes)
 
-        box_roi_pool = MultiScaleRoIAlign(
-            featmap_names=featmap_names,
+        self.featmap_names_detect = featmap_names_detect
+        self.featmap_names_recog = featmap_names_recog
+
+        box_roi_pool_detect = MultiScaleRoIAlign(
+            featmap_names=featmap_names_detect,
+            output_size=roi_output_size,
+            sampling_ratio=2
+        )
+        box_roi_pool_recog = MultiScaleRoIAlign(
+            featmap_names=featmap_names_recog,
             output_size=roi_output_size,
             sampling_ratio=2
         )
         roi_heads = RoIHeadsWithID(
             # Box
-            box_roi_pool, box_head, box_predictor,
+            box_roi_pool_detect, box_roi_pool_recog,
+            box_head_detect, box_head_recog,
+            box_predictor,
             box_fg_iou_thresh, box_bg_iou_thresh,
             box_batch_size_per_image, box_positive_fraction,
             bbox_reg_weights,
@@ -131,7 +149,6 @@ class JointRCNN(nn.Module):
         self.backbone = backbone
         self.rpn = rpn
         self.roi_heads = roi_heads  # type: RoIHeadsWithID
-        self.box_roi_pool = box_roi_pool
         self.recog_loss_fn = recog_loss_fn
         self.use_recog_loss_on_forward = use_recog_loss_on_forward
 
@@ -147,7 +164,7 @@ class JointRCNN(nn.Module):
 
         return images, targets, original_image_sizes
 
-    def forward(self, images, targets=None, use_ctx_remover=False):
+    def forward(self, images, targets=None):
         """
         Args:
             images (list[Tensor]): images to be processed
@@ -163,12 +180,10 @@ class JointRCNN(nn.Module):
 
         """
         features, proposals, losses, detections = \
-            self.forward_with_intermediary_results(images, targets,
-                                                   use_ctx_remover)
+            self.forward_with_intermediary_results(images, targets)
         return losses, detections
 
-    def forward_with_intermediary_results(self, images, targets=None,
-                                          use_ctx_remover=False):
+    def forward_with_intermediary_results(self, images, targets=None):
         if self.training and targets is None:
             raise ValueError("In training mode, targets should be passed")
         if targets is not None:
@@ -183,7 +198,7 @@ class JointRCNN(nn.Module):
         )
         detections, detector_losses = self.get_detections_from_proposals(
             features, proposals, targets, images.image_sizes,
-            orig_img_sizes, use_ctx_remover
+            orig_img_sizes
         )
         losses = {}
         losses.update(detector_losses)
@@ -202,23 +217,23 @@ class JointRCNN(nn.Module):
 
     def get_proposals_from_features(self, images: ImageList, features,
                                     targets):
+        features = self.backbone_features_to_detect_features(features)
         proposals, proposal_losses = self.rpn(images, features, targets)
         return proposals, proposal_losses
 
     def get_detections_from_proposals(self, features, proposals, targets,
-                                      image_sizes, original_image_sizes,
-                                      use_ctx_remover):
+                                      image_sizes, original_image_sizes):
+        detect_features = self.backbone_features_to_detect_features(features)
+        recog_features = self.backbone_features_to_recog_features(features)
         detections, detector_losses = self.roi_heads(
-            features, proposals, image_sizes,
-            use_ctx_remover=use_ctx_remover,
+            detect_features, recog_features, proposals, image_sizes,
             targets=targets
         )
         detections = self.transform.postprocess(detections, image_sizes,
                                                 original_image_sizes)
         return detections, detector_losses
 
-    def get_full_image_embeddings(self, images: torch.Tensor,
-                                  use_ctx_remover=False):
+    def get_full_image_embeddings(self, images: torch.Tensor):
         """
         Return the embeddings corresponding to each image entirely in a batch.
         In other words, the detection model will be used as a recognition
@@ -246,34 +261,26 @@ class JointRCNN(nn.Module):
             for img_shape in image_sizes
         ]
 
-        return self.get_box_embeddings(images, boxes, use_ctx_remover)
+        return self.get_box_embeddings(images, boxes)
 
     def get_box_embeddings(
         self, images: torch.Tensor, boxes: List[torch.Tensor],
-        use_ctx_remover=False
     ):
         """
         Return the recognition embeddings corresponding to the given boxes in
         the image.
         """
-        if use_ctx_remover:
-            box_features, global_features = \
-                self.get_box_features(
-                    images, boxes, return_global=True
-                )
-        else:
-            box_features = self.get_box_features(
-                images, boxes, return_global=False
-            )
-            global_features = None
+        box_features_detect, box_features_recog = self.get_box_features(
+            images, boxes
+        )
         _, _, embeddings = self.roi_heads.box_predictor(
-            box_features,
-            global_features
+            box_features_detect,
+            box_features_recog,
         )
 
         return embeddings
 
-    def get_box_features(self, images, boxes, return_global=False):
+    def get_box_features(self, images, boxes):
         """
         Return the features that correspond to the boxes in the image by
         passing the image through the backbone and applying RoI Pooling.
@@ -287,30 +294,34 @@ class JointRCNN(nn.Module):
         # Apply RoI pooling so that we get the same feature map shape,
         # irrespective of the size of the input images
         return self.get_box_features_from_features(
-            features, boxes, image_sizes, return_global
-        )
-
-    def get_box_features_from_features(self, features, boxes, image_sizes,
-                                       return_global=False):
-        box_features = self.roi_heads.get_box_features_from_features(
             features, boxes, image_sizes
         )
-        if return_global:
-            global_features = self.roi_heads.get_global_features_from_features(
-                features, image_sizes
-            )
-            return box_features, global_features
-        else:
-            return box_features
 
-    def get_box_global_features_from_features(self, features, boxes,
-                                              image_sizes):
+    def backbone_features_to_detect_features(self, features):
         """
-        Return box features with the global features of the respective images
-        concatenated behind them.
+        Only keep the backbone features that will be used by the detection
+        branch.
         """
-        return self.roi_heads.get_box_global_features_from_features(
-            features, boxes, image_sizes
+        return OrderedDict([
+            (k, v) for k, v in features.items()
+            if k in self.featmap_names_detect
+        ])
+
+    def backbone_features_to_recog_features(self, features):
+        """
+        Only keep the backbone features that will be used by the recognition
+        branch.
+        """
+        return OrderedDict([
+            (k, v) for k, v in features.items()
+            if k in self.featmap_names_recog
+        ])
+
+    def get_box_features_from_features(self, features, boxes, image_sizes):
+        detect_features = self.backbone_features_to_detect_features(features)
+        recog_features = self.backbone_features_to_recog_features(features)
+        return self.roi_heads.get_box_features_from_features(
+            detect_features, recog_features, boxes, image_sizes
         )
 
     def get_backbone_features(self, images):
@@ -329,8 +340,7 @@ class JointRCNN(nn.Module):
         # TODO: rename to get_recog_loss_from_box_targets
         boxes = [tgt['boxes'] for tgt in targets]
         product_ids = [tgt['product_ids'] for tgt in targets]
-        id_embeddings = self.get_box_embeddings(x, boxes,
-                                                use_ctx_remover=False)
+        id_embeddings = self.get_box_embeddings(x, boxes)
         return self.get_recog_loss_from_embeddings(
             id_embeddings,
             product_ids
@@ -352,43 +362,74 @@ class FastRCNNPredictorWithID(nn.Module):
         self.bbox_pred = nn.Linear(in_channels, num_classes * 4)
         self.id_encoder = nn.Linear(in_channels, id_embedding_size)
 
-        self.ctx_remover = ContextRemover(in_channels)
-
-    def forward(self, box_features, box_global_features=None):
+    def forward(self, box_features_detect, box_features_recog):
         """
         Args:
-            box_features (tensor): The box features.
-            global_features (bool): The corresponding global feature of each
-                box feature. If not `None`, they will be concatenated to the
-                box features and passed through the context remover.
+            box_features_detect (tensor): The box features to use for
+                detection.
+            box_features_recog (tensor): The box features to use for
+                recognition.
         """
-        if box_features.dim() == 4:
-            assert list(box_features.shape[2:]) == [1, 1]
-        box_features = box_features.flatten(start_dim=1)
-        scores = self.cls_score(box_features)
-        bbox_deltas = self.bbox_pred(box_features)
+        box_features_detect = flatten_box_features(box_features_detect)
+        box_features_recog = flatten_box_features(box_features_recog)
 
-        if box_global_features is not None:
-            no_ctx_features = self.ctx_remover(box_global_features)
-            id_embeddings = self.id_encoder(no_ctx_features)
-            return scores, bbox_deltas, id_embeddings
-        else:
-            id_embeddings = self.id_encoder(box_features)
-            return scores, bbox_deltas, id_embeddings
+        scores = self.cls_score(box_features_detect)
+        bbox_deltas = self.bbox_pred(box_features_detect)
+
+        id_embeddings = self.id_encoder(box_features_recog)
+        return scores, bbox_deltas, id_embeddings
+
+
+def flatten_box_features(box_features):
+    if box_features.dim() == 4:
+        assert list(box_features.shape[2:]) == [1, 1]
+    return box_features.flatten(start_dim=1)
 
 
 class RoIHeadsWithID(RoIHeads):
     """
     Modified from torchvision.models.detection.roi_heads.RoIHeads
     """
-    def __init__(self, *args, recog_loss_fn=None, **kwargs):
+    def __init__(self,
+                 box_roi_pool_detect, box_roi_pool_recog,
+                 box_head_detect, box_head_recog,
+                 box_predictor,
+                 # Faster R-CNN training
+                 fg_iou_thresh, bg_iou_thresh,
+                 batch_size_per_image, positive_fraction,
+                 bbox_reg_weights,
+                 # Faster R-CNN inference
+                 score_thresh,
+                 nms_thresh,
+                 detections_per_img,
+                 recog_loss_fn=None):
         """
         Args:
             recog_loss_fn: Loss function to compute the recognition loss. If
                 `None`, the recognition loss will not be computed.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            box_head=box_head_detect,
+            box_roi_pool=box_roi_pool_detect,
+            box_predictor=box_predictor,
+            # Faster R-CNN training
+            fg_iou_thresh=fg_iou_thresh,
+            bg_iou_thresh=bg_iou_thresh,
+            batch_size_per_image=batch_size_per_image,
+            positive_fraction=positive_fraction,
+            bbox_reg_weights=bbox_reg_weights,
+            # Faster R-CNN inference
+            score_thresh=score_thresh,
+            nms_thresh=nms_thresh,
+            detections_per_img=detections_per_img,
+        )
         self.recog_loss_fn = recog_loss_fn
+
+        self.box_head_detect = box_head_detect
+        self.box_head_recog = box_head_recog
+
+        self.box_roi_pool_detect = box_roi_pool_detect
+        self.box_roi_pool_recog = box_roi_pool_recog
 
     def postprocess_detections(self,
                                class_logits,    # type: Tensor
@@ -445,10 +486,10 @@ class RoIHeadsWithID(RoIHeads):
         return all_boxes, all_scores, all_id_embs, all_labels, all_roi_idxs
 
     def forward(self,
-                features,      # type: Dict[str, Tensor]
+                detect_features,      # type: Dict[str, Tensor]
+                recog_features,      # type: Dict[str, Tensor]
                 proposals,     # type: List[Tensor]
                 image_sizes,  # type: List[Tuple[int, int]]
-                use_ctx_remover,
                 targets=None,  # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
@@ -482,22 +523,14 @@ class RoIHeadsWithID(RoIHeads):
             labels = None
             regression_targets = None
 
-        box_features = self.get_box_features_from_features(
-            features, proposals, image_sizes
-        )
+        box_features_detect, box_features_recog = \
+            self.get_box_features_from_features(
+                detect_features, recog_features,
+                proposals, image_sizes
+            )
 
-        if use_ctx_remover:
-            global_features = self.get_global_features_from_features(
-                features, image_sizes
-            )
-            box_global_features = concat_box_and_global_features(
-                box_features, global_features, proposals
-            )
-            class_logits, box_regression, id_embeddings = \
-                self.box_predictor(box_features, box_global_features)
-        else:
-            class_logits, box_regression, id_embeddings = \
-                self.box_predictor(box_features)
+        class_logits, box_regression, id_embeddings = \
+            self.box_predictor(box_features_detect, box_features_recog)
 
         result: List[Dict[str, torch.Tensor]] = []
         losses = {}
@@ -537,67 +570,18 @@ class RoIHeadsWithID(RoIHeads):
 
         return result, losses
 
-    def get_box_features_from_features(self, features, boxes, image_sizes):
-        box_features = self.box_roi_pool(
-            features, boxes, image_sizes
+    def get_box_features_from_features(self, detect_features, recog_features,
+                                       boxes, image_sizes):
+        box_features_detect = self.box_roi_pool_detect(
+            detect_features, boxes, image_sizes
         )
-        return self.box_head(box_features)
-
-    def get_global_features_from_features(self, features, image_sizes):
-        full_image_boxes = [
-            torch.tensor([
-                [0., 0., w, h]
-            ]).type_as(features['0'])
-            for (h, w) in image_sizes
-        ]
-        return self.get_box_features_from_features(features, full_image_boxes,
-                                                   image_sizes)
-
-    def get_box_global_features_from_features(self, features, boxes,
-                                              image_sizes):
-        """
-        Return box features with the global features of the respective images
-        concatenated behind them.
-        """
-        box_features_ctx = self.get_box_features_from_features(
-            features, [
-                box.float()
-                for box in boxes
-            ], image_sizes
+        box_features_recog = self.box_roi_pool_recog(
+            recog_features, boxes, image_sizes
         )
-        global_features = self.get_global_features_from_features(
-            features, image_sizes
+        return (
+            self.box_head_detect(box_features_detect),
+            self.box_head_recog(box_features_recog)
         )
-        # Repeat and concat to get the same shape as box_features_ctx
-        return concat_box_and_global_features(box_features_ctx,
-                                              global_features,
-                                              boxes)
-
-
-def concat_box_and_global_features(box_features, global_features, boxes):
-    global_features = torch.cat([
-        img_global_features.repeat((img_proposals.shape[0], 1))
-        for img_global_features, img_proposals in zip(
-            global_features, boxes
-        )
-    ])
-    return torch.cat(
-        (box_features, global_features),
-        dim=1
-    )
-
-
-class ContextRemover(nn.Module):
-    def __init__(self, box_head_out_channels=1024):
-        super().__init__()
-
-        in_features = box_head_out_channels * 2
-        out_features = box_head_out_channels
-
-        self.fc = nn.Linear(in_features, out_features)
-
-    def forward(self, x):
-        return self.fc(x)
 
 
 class PassThroughRCNNTransform(nn.Module):
