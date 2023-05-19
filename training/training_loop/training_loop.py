@@ -22,6 +22,7 @@ class TrainingLoop:
         save_last=True,
         save_best=True,
         log_fpn_levels=True,
+        force_fpn_level=None,
     ):
         self.training_steps = training_steps
         self.model = self.training_steps.model.to(device)
@@ -40,6 +41,9 @@ class TrainingLoop:
         self.save_unique = save_unique
         self.save_last = save_last
         self.save_best = save_best
+
+        if force_fpn_level is not None:
+            self.set_forced_fpn_level(force_fpn_level)
 
         if log_fpn_levels:
             self.add_fpn_level_logger()
@@ -135,6 +139,16 @@ class TrainingLoop:
         LevelMapper.__call__ = track_map_levels
         self.training_steps.on_after_training_epoch = reset_train_fpn_levels
         self.training_steps.on_after_validation_epoch = reset_val_fpn_levels
+
+    def set_forced_fpn_level(self, force_fpn_level):
+        map_levels = LevelMapper.__call__
+
+        @functools.wraps(map_levels)
+        def force_map_levels(*args, **kwargs):
+            levels = map_levels(*args, **kwargs)
+            return torch.ones_like(levels) * force_fpn_level
+
+        LevelMapper.__call__ = force_map_levels
 
     def update_max_metrics(self, val_log_dict):
         for k, v in val_log_dict.items():

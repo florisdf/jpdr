@@ -107,6 +107,9 @@ def run_training(
     # Task-specific training args
     use_task_specific=False,
 
+    # Force FPN level
+    force_fpn_level=None,
+
     # Context remover training args
     use_ctx_remover=False,
     max_ctx_remover_train_crops=128,
@@ -263,6 +266,7 @@ def run_training(
         save_unique=save_unique,
         save_last=save_last,
         save_best=save_best,
+        force_fpn_level=force_fpn_level,
     )
 
     if isinstance(training_steps, TrainingStepsSplitEpoch):
@@ -561,6 +565,15 @@ if __name__ == '__main__':
         help='If set, use training procedure 4: "Task-specific training".'
     )
 
+    parser.add_argument(
+        '--force_fpn_level', default=None,
+        help='Forces the FPN level mapper to always choose the given feature '
+        'level. If not set, the level will be chosen separately for each '
+        'region proposal with the algorithm described in the original FPN '
+        'paper.',
+        type=int,
+    )
+
     args = parser.parse_args()
 
     wandb.init(entity=args.wandb_entity, project=args.wandb_project,
@@ -638,4 +651,7 @@ if __name__ == '__main__':
 
         # Task-specific args
         use_task_specific=args.use_task_specific,
+
+        # Force FPN level
+        force_fpn_level=args.force_fpn_level,
     )
