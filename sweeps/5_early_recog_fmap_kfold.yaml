@@ -1,0 +1,39 @@
+description: "We remove the FPN and use a different box head for detection and recognition. Moreover, the feature map from which the RoI features are computed, can be chosen differently for the detection and recognition heads (with featmap_names_recog and featmap_names_detect). For this sweep, we investigate what happens when the recognition head is put on an earlier feature map. Because earlier feature maps have a smaller receptive field, we would expect less difference between the recognition performance on images inside a rack context and on images of cropped-out products."
+program: train.py
+method: grid
+entity: jpdr
+project: experiments
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
+  - '--use_task_specific'
+  - '--no_use_fpn'
+parameters:
+  backbone_name:
+    value: resnet50
+  lr:
+    value: 0.005
+  dataset:
+    value: tonioni
+  k_fold_num_folds:
+    value: 5
+  k_fold_seed:
+    value: 15
+  k_fold_val_fold:
+    distribution: categorical
+    values: [0, 1, 2, 3, 4]
+  featmap_names_recog:
+    distribution: categorical
+    values: [0, 1, 2, 3]
+  batch_size_det:
+    value: 2
+  batch_size_recog:
+    value: 2
+  trainable_layers:
+    value: 1
+  num_epochs:
+    value: 500
+  num_workers:
+    value: 4
