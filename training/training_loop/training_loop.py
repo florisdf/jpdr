@@ -121,18 +121,16 @@ class TrainingLoop:
         @functools.wraps(on_after_training_epoch)
         def reset_train_fpn_levels(*args, **kwargs):
             log_dict = on_after_training_epoch(*args, **kwargs)
-            set_reset_fpn_levels(log_dict)
+            log_dict['Train FPN levels'] = wandb.Histogram(self.fpn_levels)
+            self.fpn_levels = []
             return log_dict
 
         @functools.wraps(on_after_validation_epoch)
         def reset_val_fpn_levels(*args, **kwargs):
             log_dict = on_after_validation_epoch(*args, **kwargs)
-            set_reset_fpn_levels(log_dict)
-            return log_dict
-
-        def set_reset_fpn_levels(log_dict):
-            log_dict['FPN levels'] = wandb.Histogram(self.fpn_levels)
+            log_dict['Val FPN levels'] = wandb.Histogram(self.fpn_levels)
             self.fpn_levels = []
+            return log_dict
 
         LevelMapper.__call__ = track_map_levels
         self.training_steps.on_after_training_epoch = reset_train_fpn_levels
