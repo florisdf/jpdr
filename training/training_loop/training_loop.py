@@ -1,7 +1,9 @@
+import functools
 from pathlib import Path
 import sys
 
 import torch
+from torchvision.ops.poolers import LevelMapper
 from tqdm import tqdm
 import wandb
 
@@ -19,6 +21,7 @@ class TrainingLoop:
         save_unique=False,
         save_last=True,
         save_best=True,
+        log_fpn_levels=True,
     ):
         self.training_steps = training_steps
         self.model = self.training_steps.model.to(device)
@@ -37,6 +40,9 @@ class TrainingLoop:
         self.save_unique = save_unique
         self.save_last = save_last
         self.save_best = save_best
+
+        if log_fpn_levels:
+            self.add_fpn_level_logger()
 
     def run(self):
         self.max_metrics = {}
@@ -97,6 +103,40 @@ class TrainingLoop:
 
             with torch.no_grad():
                 self.training_steps.on_validation_step((x, targets))
+
+    def add_fpn_level_logger(self):
+        self.fpn_levels = []
+
+        map_levels = LevelMapper.__call__
+        on_after_training_epoch = self.training_steps.on_after_training_epoch
+        on_after_validation_epoch = \
+            self.training_steps.on_after_validation_epoch
+
+        @functools.wraps(map_levels)
+        def track_map_levels(*args, **kwargs):
+            levels = map_levels(*args, **kwargs)
+            self.fpn_levels.extend(levels.cpu().numpy())
+            return levels
+
+        @functools.wraps(on_after_training_epoch)
+        def reset_train_fpn_levels(*args, **kwargs):
+            log_dict = on_after_training_epoch(*args, **kwargs)
+            set_reset_fpn_levels(log_dict)
+            return log_dict
+
+        @functools.wraps(on_after_validation_epoch)
+        def reset_val_fpn_levels(*args, **kwargs):
+            log_dict = on_after_validation_epoch(*args, **kwargs)
+            set_reset_fpn_levels(log_dict)
+            return log_dict
+
+        def set_reset_fpn_levels(log_dict):
+            log_dict['FPN levels'] = wandb.Histogram(self.fpn_levels)
+            self.fpn_levels = []
+
+        LevelMapper.__call__ = track_map_levels
+        self.training_steps.on_after_training_epoch = reset_train_fpn_levels
+        self.training_steps.on_after_validation_epoch = reset_val_fpn_levels
 
     def update_max_metrics(self, val_log_dict):
         for k, v in val_log_dict.items():
