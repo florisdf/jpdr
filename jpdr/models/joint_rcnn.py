@@ -6,6 +6,7 @@ from torch import nn, Tensor
 
 import torch.nn.functional as F
 from torchvision.models.detection.anchor_utils import AnchorGenerator
+from torchvision.models.detection.faster_rcnn import TwoMLPHead
 from torchvision.models.detection.image_list import ImageList
 from torchvision.models.detection.roi_heads import RoIHeads, fastrcnn_loss
 from torchvision.models.detection.rpn import RegionProposalNetwork, RPNHead
@@ -17,9 +18,9 @@ class JointRCNN(nn.Module):
     def __init__(
         self,
         backbone: nn.Module,
+        backbone_out_channels: int,
         anchor_sizes: Tuple[Tuple[int]],
         featmap_names: List[str],
-        box_head: nn.Module,
         box_head_out_channels: int,
         id_embedding_size,
         recog_loss_fn,
@@ -47,13 +48,8 @@ class JointRCNN(nn.Module):
                 input and returns a batch of feature maps for the RPN. The RPN
                 regions are then 'cropped' out of the feature maps (with RoI
                 pooling) and passed through the RoI heads.
-            box_head: This is the first stage of the RoI heads. All RoIs will
-                pass through this network. Takes a batch of RoIs as input and
-                returns a batch of feature vectors that will be used as an
-                input to the three predictor networks (i.e. the box regression
-                network, the classification network and the recognition
-                network). The `box_head` should have an attribute
-                `out_channels` with the number of output channels.
+            backbone_out_channels: The number of output channels in the feature
+                map extracted by the backbone.
             box_head_out_channels (int): The number of output channels of the
                 box head.
             anchor_sizes: For backbones without FPN, use e.g. `((32, 64, 128,
@@ -77,7 +73,7 @@ class JointRCNN(nn.Module):
                 anchor_sizes, aspect_ratios
         )
         rpn_head = RPNHead(
-            backbone.out_channels,
+            backbone_out_channels,
             rpn_anchor_generator.num_anchors_per_location()[0]
         )
 
@@ -92,6 +88,12 @@ class JointRCNN(nn.Module):
             rpn_batch_size_per_image, rpn_positive_fraction,
             rpn_pre_nms_top_n, rpn_post_nms_top_n, rpn_nms_thresh,
             score_thresh=rpn_score_thresh,
+        )
+
+        # Box head
+        box_head = TwoMLPHead(
+            backbone_out_channels * roi_output_size ** 2,
+            box_head_out_channels
         )
 
         # RoI Heads

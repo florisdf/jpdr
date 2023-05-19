@@ -3,11 +3,12 @@ from collections import OrderedDict
 from pathlib import Path
 
 import torch
-from torchvision.models import resnet
 from torch.optim import SGD
+from torchvision.models import resnet
+from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 import wandb
 
-from jpdr.models import JointResNetFPN
+from jpdr.models import JointRCNN
 from jpdr.losses import CrossEntropyLoss
 
 from training.training_loop import (
@@ -47,8 +48,9 @@ def run_training(
     box_fg_iou_thresh=0.5, box_bg_iou_thresh=0.5,
 
     # Anchor
-    featmap_names=['0', '1', '2', '3'],
-    anchor_sizes=((32,), (64,), (128,), (256,), (512,)),
+    featmap_names=None,
+    anchor_sizes=None,
+    use_fpn=True,
 
     # Detection batch args
     batch_size_det=2,
@@ -161,19 +163,49 @@ def run_training(
         'cuda' if device == 'cuda' and torch.cuda.is_available() else 'cpu'
     )
 
-    model = JointResNetFPN(
-        backbone_name=backbone_name,
-        pretrained=pretrained,
-        trainable_layers=trainable_layers,
-        roi_output_size=roi_output_size,
-        box_head_out_channels=box_head_out_channels,
-        featmap_names=featmap_names,
+    if featmap_names is None:
+        featmap_names = (
+            ['0', '1', '2', '3'] if use_fpn
+            else ['0']
+        )
+    if anchor_sizes is None:
+        anchor_sizes = (
+            ((32,), (64,), (128,), (256,), (512,)) if use_fpn
+            else ((32, 64, 128, 256, 512),)
+        )
+
+    if use_fpn:
+        backbone = resnet_fpn_backbone(
+            backbone_name=backbone_name,
+            pretrained=pretrained,
+            trainable_layers=trainable_layers
+        )
+        backbone_out_channels = backbone.out_channels
+    else:
+        backbone = resnet.__dict__[backbone_name](pretrained=pretrained)
+        backbone_out_channels = backbone.fc.in_features
+        freeze_layers(backbone, trainable_layers)
+        backbone = torch.nn.Sequential(
+            OrderedDict([
+                *(list(backbone.named_children())[:-1]),
+            ])
+        )
+
+    model = JointRCNN(
+        backbone=backbone,
+        backbone_out_channels=backbone_out_channels,
         anchor_sizes=anchor_sizes,
+        featmap_names=featmap_names,
+        box_head_out_channels=box_head_out_channels,
         id_embedding_size=id_embedding_size,
         recog_loss_fn=recog_loss_fn,
+        # RoI parameters
+        roi_output_size=roi_output_size,
+        # Box parameters
         box_num_classes=box_num_classes,
         box_fg_iou_thresh=box_fg_iou_thresh,
         box_bg_iou_thresh=box_bg_iou_thresh,
+
         use_recog_loss_on_forward=not (
             use_split_detect_recog
             or use_crop_batch_inputs
@@ -206,12 +238,7 @@ def run_training(
     if use_two_models:
         TrainingSteps = TrainingStepsTwoModels
         recognizer = resnet.__dict__[backbone_name](pretrained=pretrained)
-        layers_to_train = ["layer4", "layer3", "layer2", "layer1", "conv1"][
-            :trainable_layers
-        ]
-        for name, parameter in recognizer.named_parameters():
-            if all([not name.startswith(layer) for layer in layers_to_train]):
-                parameter.requires_grad_(False)
+        freeze_layers(recognizer, trainable_layers)
         recognizer = torch.nn.Sequential(
             OrderedDict([
                 *(list(recognizer.named_children())[:-1]),
@@ -286,6 +313,15 @@ def run_training(
         **training_loop_kwargs
     )
     training_loop.run()
+
+
+def freeze_layers(model, trainable_layers):
+    layers_to_train = ["layer4", "layer3", "layer2", "layer1", "conv1"][
+        :trainable_layers
+    ]
+    for name, parameter in model.named_parameters():
+        if all([not name.startswith(layer) for layer in layers_to_train]):
+            parameter.requires_grad_(False)
 
 
 def int_list_arg_type(arg):
@@ -404,12 +440,17 @@ if __name__ == '__main__':
 
     # Anchor
     parser.add_argument(
-        '--featmap_names', default='0,1,2,3',
+        '--featmap_names', default=None,
         help='The names of the feature maps (in the ordered dict of feature '
         'maps returned by the backbone) that will be used for pooling. '
         'If the backbone is not an FPN and simply returns a tensor '
         "(i.e. only a single feature map), set `featmap_names` to `['0']`.",
-        type=str_list_arg_type
+        type=lambda x: x if x is None else str_list_arg_type(x)
+    )
+    parser.add_argument(
+        '--no_use_fpn',
+        action='store_true',
+        help="Set this flag if you don't want to use an FPN backbone."
     )
 
     # Detection batch args
@@ -602,6 +643,7 @@ if __name__ == '__main__':
 
         # Anchor
         featmap_names=args.featmap_names,
+        use_fpn=not args.no_use_fpn,
 
         # Detection batch args
         batch_size_det=args.batch_size_det,
