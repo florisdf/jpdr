@@ -8,7 +8,7 @@ command:
   - ${program}
   - ${args}
   - '--use_task_specific'
-  - '--no_shared_bbox_head'
+  - '--shared_bbox_head'
 parameters:
   backbone_name:
     value: resnet50
