@@ -1,0 +1,35 @@
+description: "Uit de vorige sweep bleek dat een model zonder FPN en met aparte recognition box head beter werkt dan een FPN met gedeelde box head. Ligt dit aan de FPN of aan de box head? Om dit na te gaan, trainen we hier een FPN met aparte box head voor de recognition branch."
+program: train.py
+method: grid
+entity: jpdr
+project: experiments
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
+  - '--use_task_specific'
+parameters:
+  backbone_name:
+    value: resnet50
+  lr:
+    value: 0.005
+  dataset:
+    value: tonioni
+  k_fold_num_folds:
+    value: 5
+  k_fold_seed:
+    value: 15
+  k_fold_val_fold:
+    distribution: categorical
+    values: [0, 1, 2, 3, 4]
+  batch_size_det:
+    value: 2
+  batch_size_recog:
+    value: 2
+  trainable_layers:
+    value: 1
+  num_epochs:
+    value: 500
+  num_workers:
+    value: 4
