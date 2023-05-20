@@ -114,12 +114,6 @@ def run_training(
     # Force FPN level
     force_fpn_level=None,
 
-    # Context remover training args
-    use_ctx_remover=False,
-    max_ctx_remover_train_crops=128,
-    max_ctx_remover_train_crop_size=256,
-    ctx_remover_weight=1.0,
-
     shared_bbox_head=False,
 ):
     if sum(int(x) for x in [
@@ -232,7 +226,6 @@ def run_training(
         use_recog_loss_on_forward=not (
             use_split_detect_recog
             or use_crop_batch_inputs
-            or use_ctx_remover
         ),
 
         shared_bbox_head=shared_bbox_head,
@@ -295,15 +288,6 @@ def run_training(
         )
     elif use_task_specific:
         TrainingSteps = TrainingStepsTaskSpecific
-
-    if use_ctx_remover:
-        TrainingSteps = TrainingStepsCtxRm
-        extra_kwargs = dict(
-            max_ctx_remover_train_crops=max_ctx_remover_train_crops,
-            max_ctx_remover_train_crop_size=max_ctx_remover_train_crop_size,
-            ctx_remover_weight=ctx_remover_weight,
-        )
-        training_step_kwargs.update(extra_kwargs)
 
     training_steps = TrainingSteps(**training_step_kwargs)
 
