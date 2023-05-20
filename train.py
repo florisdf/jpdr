@@ -629,9 +629,9 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        '--no_shared_bbox_head',
+        '--shared_bbox_head',
         action='store_true',
-        help='Don\'t use same bbox head for recognition and detection.'
+        help='Use same bbox head for recognition and detection.'
     )
 
     args = parser.parse_args()
@@ -717,5 +717,5 @@ if __name__ == '__main__':
         # Force FPN level
         force_fpn_level=args.force_fpn_level,
 
-        shared_bbox_head=not args.no_shared_bbox_head,
+        shared_bbox_head=args.shared_bbox_head,
     )
