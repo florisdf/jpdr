@@ -167,12 +167,12 @@ def run_training(
 
     if featmap_names_detect is None:
         featmap_names_detect = (
-            ['0', '1', '2', '3'] if use_fpn
+            ['0', '1', '2', '3', 'pool'] if use_fpn
             else ['3']
         )
     if featmap_names_recog is None:
         featmap_names_recog = (
-            ['0', '1', '2', '3'] if use_fpn
+            ['0', '1', '2', '3', 'pool'] if use_fpn
             else ['3']
         )
     if anchor_sizes is None:
