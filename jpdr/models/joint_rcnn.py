@@ -42,6 +42,8 @@ class JointRCNN(nn.Module):
         box_batch_size_per_image=512, box_positive_fraction=0.25,
         bbox_reg_weights=None,
 
+        shared_bbox_head=False,
+
         use_recog_loss_on_forward=False,
     ):
         """
@@ -64,6 +66,8 @@ class JointRCNN(nn.Module):
                 used for pooling in the detection branch.
             featmap_names_recog: Same as `featmap_names_detect` but for the
                 recognition branch.
+            shared_bbox_head: If True, use the same bbox head for recognition
+                and detection.
             use_recog_loss_on_forward: If True, compute the recognition loss
                 when forwarding. The passed-in targets should contain
                 `product_ids`.
@@ -99,10 +103,13 @@ class JointRCNN(nn.Module):
             detect_out_channels * roi_output_size ** 2,
             box_head_out_channels
         )
-        box_head_recog = TwoMLPHead(
-            recog_out_channels * roi_output_size ** 2,
-            box_head_out_channels
-        )
+        if shared_bbox_head:
+            box_head_recog = box_head_detect
+        else:
+            box_head_recog = TwoMLPHead(
+                recog_out_channels * roi_output_size ** 2,
+                box_head_out_channels
+            )
 
         # RoI Heads
         box_predictor = FastRCNNPredictorWithID(box_head_out_channels,

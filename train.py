@@ -119,6 +119,8 @@ def run_training(
     max_ctx_remover_train_crops=128,
     max_ctx_remover_train_crop_size=256,
     ctx_remover_weight=1.0,
+
+    shared_bbox_head=False,
 ):
     if sum(int(x) for x in [
             use_split_detect_recog, use_crop_batch_inputs, use_task_specific,
@@ -231,7 +233,9 @@ def run_training(
             use_split_detect_recog
             or use_crop_batch_inputs
             or use_ctx_remover
-        )
+        ),
+
+        shared_bbox_head=shared_bbox_head,
     )
     if load_ckpt is not None:
         model.load_state_dict(torch.load(load_ckpt))
@@ -640,6 +644,12 @@ if __name__ == '__main__':
         type=int,
     )
 
+    parser.add_argument(
+        '--no_shared_bbox_head',
+        action='store_true',
+        help='Don\'t use same bbox head for recognition and detection.'
+    )
+
     args = parser.parse_args()
 
     wandb.init(entity=args.wandb_entity, project=args.wandb_project,
@@ -722,4 +732,6 @@ if __name__ == '__main__':
 
         # Force FPN level
         force_fpn_level=args.force_fpn_level,
+
+        shared_bbox_head=not args.no_shared_bbox_head,
     )
