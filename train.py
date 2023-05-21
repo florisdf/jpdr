@@ -173,10 +173,10 @@ def run_training(
             return ['0', '1', '2', '3', 'pool']
         if is_branched_backbone:
             if branch_layer == 'final_pool':
-                return 'common.3'
+                return ['common.3']
             else:
-                return f'branch{branch}.3'
-        return '3'
+                return [f'branch{branch}.3']
+        return ['3']
 
     if featmap_names_detect is None:
         featmap_names_detect = get_default_featmaps_name('1', use_fpn)
