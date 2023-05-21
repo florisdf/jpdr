@@ -202,10 +202,10 @@ def run_training(
         # maps, so that both the detection and recognition branch can choose
         # which feature map to use
         return_layers = {
-            'layer1': '1',
-            'layer2': '2',
-            'layer3': '3',
-            'layer4': '4',
+            'layer1': '0',
+            'layer2': '1',
+            'layer3': '2',
+            'layer4': '3',
             'avgpool': 'pool',
         }
         if is_branched_backbone:
