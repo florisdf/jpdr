@@ -11,6 +11,7 @@ import wandb
 
 from jpdr.models import JointRCNN
 from jpdr.losses import CrossEntropyLoss
+from jpdr.models.model_brancher import ModelBrancher
 
 from training.training_loop import (
     TrainingLoopSameEpoch,
@@ -113,7 +114,7 @@ def run_training(
     # Force FPN level
     force_fpn_level=None,
 
-    shared_bbox_head=False,
+    branch_layer='bbox_head',
 ):
     if sum(int(x) for x in [
             use_split_detect_recog, use_crop_batch_inputs, use_task_specific,
@@ -160,15 +161,21 @@ def run_training(
         'cuda' if device == 'cuda' and torch.cuda.is_available() else 'cpu'
     )
 
+    if use_fpn:
+        # TODO implement backbone branching for FPN
+        raise NotImplementedError
+
+    is_branched_backbone = branch_layer not in ['bbox_head', 'roi_head']
+
     if featmap_names_detect is None:
         featmap_names_detect = (
             ['0', '1', '2', '3', 'pool'] if use_fpn
-            else ['3']
+            else ['branch1.pool' if is_branched_backbone else 'pool']
         )
     if featmap_names_recog is None:
         featmap_names_recog = (
             ['0', '1', '2', '3', 'pool'] if use_fpn
-            else ['3']
+            else ['branch2.pool' if is_branched_backbone else 'pool']
         )
     if anchor_sizes is None:
         anchor_sizes = (
@@ -198,8 +205,12 @@ def run_training(
         return_layers = {
             f'layer{k}': str(v) for v, k in enumerate(returned_layers)
         }
-        backbone = IntermediateLayerGetter(backbone,
-                                           return_layers=return_layers)
+        if is_branched_backbone:
+            backbone = ModelBrancher(backbone, return_layers=returned_layers,
+                                     branch_layer=branch_layer)
+        else:
+            backbone = IntermediateLayerGetter(backbone,
+                                               return_layers=return_layers)
 
     test_out = backbone(torch.randn((1, 3, 224, 224)))
     detect_out_channels = test_out[featmap_names_detect[0]].shape[1]
@@ -227,7 +238,7 @@ def run_training(
             or use_crop_batch_inputs
         ),
 
-        shared_bbox_head=shared_bbox_head,
+        shared_bbox_head=(branch_layer == 'roi_head'),
     )
     if load_ckpt is not None:
         model.load_state_dict(torch.load(load_ckpt))
@@ -628,9 +639,16 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        '--shared_bbox_head',
-        action='store_true',
-        help='Use same bbox head for recognition and detection.'
+        '--branch_layer', default='bbox_head',
+        help="Where to split from the common branch into separate detection "
+        "and recognition branches. If 'roi_head', the different tasks will "
+        "only have different RoI heads. If 'bbox_head', the different BBox "
+        "heads will be used for detection and recognition. Other values are "
+        "interpreted as layer names of the backbone. The given name will "
+        "then be the first backbone layer the is different for both tasks. "
+        "Note, however that the architecture is always the same for both "
+        "branches.",
+        type=str,
     )
 
     args = parser.parse_args()
@@ -716,5 +734,5 @@ if __name__ == '__main__':
         # Force FPN level
         force_fpn_level=args.force_fpn_level,
 
-        shared_bbox_head=args.shared_bbox_head,
+        branch_layer=args.branch_layer,
     )
