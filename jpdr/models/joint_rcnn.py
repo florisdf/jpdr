@@ -296,7 +296,7 @@ class JointRCNN(nn.Module):
 
         features = self.get_backbone_features(images)
 
-        boxes = [box.type_as(features['0']) for box in boxes]
+        boxes = [box.type_as(features[list(features.keys())[0]]) for box in boxes]
 
         # Apply RoI pooling so that we get the same feature map shape,
         # irrespective of the size of the input images
