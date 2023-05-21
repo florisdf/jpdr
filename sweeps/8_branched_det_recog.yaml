@@ -19,11 +19,11 @@ parameters:
   branch_layer:
     distribution: categorical
     values:
-      - '1'
-      - '2'
-      - '3'
-      - '4'
-      - 'pool'
+      - 'layer1'
+      - 'layer2'
+      - 'layer3'
+      - 'layer4'
+      - 'avgpool'
   k_fold_num_folds:
     value: 5
   k_fold_seed:
