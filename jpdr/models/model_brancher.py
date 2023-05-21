@@ -60,23 +60,22 @@ class ModelBrancher(nn.Module):
         self.return_layers = orig_return_layers
 
     def forward(self, x):
-        out_common = OrderedDict()
-        out_branches = [OrderedDict() for _ in self.branches]
+        out = OrderedDict()
 
         for name, module in self.common.items():
             x = module(x)
             if name in self.return_layers:
                 out_name = self.return_layers[name]
-                out_common[out_name] = x
+                out[f'common.{out_name}'] = x
 
         common_x = x
 
-        for out_dict, branch in zip(out_branches, self.branches):
+        for i, branch in enumerate(self.branches):
             x = common_x
             for name, module in branch.items():
                 x = module(x)
                 if name in self.return_layers:
                     out_name = self.return_layers[name]
-                    out_dict[out_name] = x
+                    out[f'branch{i+1}.{out_name}'] = x
 
-        return out_common, *out_branches
+        return out
