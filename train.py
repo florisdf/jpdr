@@ -201,12 +201,15 @@ def run_training(
         # Let the backbone return an OrderedDict with all intermediate feature
         # maps, so that both the detection and recognition branch can choose
         # which feature map to use
-        returned_layers = [1, 2, 3, 4]
         return_layers = {
-            f'layer{k}': str(v) for v, k in enumerate(returned_layers)
+            'layer1': '1',
+            'layer2': '2',
+            'layer3': '3',
+            'layer4': '4',
+            'avgpool': 'pool',
         }
         if is_branched_backbone:
-            backbone = ModelBrancher(backbone, return_layers=returned_layers,
+            backbone = ModelBrancher(backbone, return_layers=return_layers,
                                      branch_layer=branch_layer)
         else:
             backbone = IntermediateLayerGetter(backbone,

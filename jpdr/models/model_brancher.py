@@ -51,11 +51,12 @@ class ModelBrancher(nn.Module):
             if not return_layers:
                 break
 
-        super(ModelBrancher).__init__()
+        super().__init__()
 
         self.common = nn.ModuleDict(common_layers)
-        self.branches = [nn.ModuleDict(branch_layers)
-                         for branch_layers in branches]
+        self.branches = nn.ModuleList([
+            nn.ModuleDict(branch_layers) for branch_layers in branches
+        ])
 
         self.return_layers = orig_return_layers
 
