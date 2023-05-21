@@ -3,6 +3,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 import torch
+from torch import nn
 from torch.optim import SGD
 from torchvision.models import resnet
 from torchvision.models._utils import IntermediateLayerGetter
@@ -192,7 +193,8 @@ def run_training(
         freeze_layers(backbone, trainable_layers)
         backbone = torch.nn.Sequential(
             OrderedDict([
-                *(list(backbone.named_children())[:-1]),
+                *(list(backbone.named_children())[:-2]),
+                ('maxpool', nn.MaxPool2d(1, 2, 0)),
             ])
         )
 
@@ -203,7 +205,7 @@ def run_training(
         return_layers = {
             f'layer{k}': str(v) for v, k in enumerate(returned_layers)
         }
-        return_layers['avgpool'] = 'pool'
+        return_layers['maxpool'] = 'pool'
         backbone = IntermediateLayerGetter(backbone,
                                            return_layers=return_layers)
 
