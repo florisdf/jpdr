@@ -26,11 +26,11 @@ parameters:
   branch_layer:
     distribution: categorical
     values:
-      - 'layer1'
-      - 'layer2'
-      - 'layer3'
-      - 'layer4'
       - 'avgpool'
+      - 'layer4'
+      - 'layer3'
+      - 'layer2'
+      - 'layer1'
   batch_size_det:
     value: 2
   batch_size_recog:
