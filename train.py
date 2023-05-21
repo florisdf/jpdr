@@ -196,7 +196,7 @@ def run_training(
         backbone = torch.nn.Sequential(
             OrderedDict([
                 *(list(backbone.named_children())[:-2]),
-                ('maxpool', nn.MaxPool2d(1, 2, 0)),
+                ('final_pool', nn.MaxPool2d(1, 2, 0)),
             ])
         )
 
@@ -208,7 +208,7 @@ def run_training(
             'layer2': '1',
             'layer3': '2',
             'layer4': '3',
-            'maxpool': 'pool',
+            'final_pool': 'pool',
         }
 
         if is_branched_backbone:
