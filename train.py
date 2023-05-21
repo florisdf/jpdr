@@ -351,7 +351,7 @@ def freeze_layers(model, trainable_layers, train_branch, branch_layer):
         :trainable_layers
     ]
     for name, parameter in model.named_parameters():
-        if name == branch_layer and train_branch:
+        if name.startswith(branch_layer) and train_branch:
             break
         if all([not name.startswith(layer) for layer in layers_to_train]):
             parameter.requires_grad_(False)
