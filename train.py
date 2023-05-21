@@ -168,16 +168,21 @@ def run_training(
 
     is_branched_backbone = branch_layer not in ['bbox_head', 'roi_head']
 
+    def get_default_featmaps_name(branch, use_fpn):
+        if use_fpn:
+            return ['0', '1', '2', '3', 'pool']
+        if is_branched_backbone:
+            if branch_layer == 'final_pool':
+                return 'common.3'
+            else:
+                return f'branch{branch}.3'
+        return '3'
+
     if featmap_names_detect is None:
-        featmap_names_detect = (
-            ['0', '1', '2', '3', 'pool'] if use_fpn
-            else ['branch1.3' if is_branched_backbone else '3']
-        )
+        featmap_names_detect = get_default_featmaps_name('1', use_fpn)
     if featmap_names_recog is None:
-        featmap_names_recog = (
-            ['0', '1', '2', '3', 'pool'] if use_fpn
-            else ['branch2.3' if is_branched_backbone else '3']
-        )
+        featmap_names_recog = get_default_featmaps_name('2', use_fpn)
+
     if anchor_sizes is None:
         anchor_sizes = (
             [[32], [64], [128], [256], [512]] if use_fpn
