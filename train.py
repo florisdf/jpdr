@@ -398,10 +398,10 @@ if __name__ == '__main__':
         type=int
     )
     parser.add_argument(
-        '--train_branch',
+        '--no_train_branch',
         action='store_true',
-        help='Ensure to train the entire branch, even if these contain more '
-        'backbone layers than the amount set by trainable_layers.'
+        help='If unset, ensure to train the entire branch, even if these '
+        'contain more backbone layers than the amount set by trainable_layers.'
     )
     parser.add_argument(
         '--load_ckpt', default=None,
@@ -680,7 +680,7 @@ if __name__ == '__main__':
         backbone_name=args.backbone_name,
         pretrained=not args.no_pretrained,
         trainable_layers=args.trainable_layers,
-        train_branch=args.train_branch,
+        train_branch=not args.no_train_branch,
         load_ckpt=args.load_ckpt,
         save_unique=args.save_unique,
         save_best=args.save_best,
