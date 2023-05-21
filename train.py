@@ -168,12 +168,12 @@ def run_training(
     if featmap_names_detect is None:
         featmap_names_detect = (
             ['0', '1', '2', '3'] if use_fpn
-            else ['3']
+            else ['pool']
         )
     if featmap_names_recog is None:
         featmap_names_recog = (
             ['0', '1', '2', '3'] if use_fpn
-            else ['3']
+            else ['pool']
         )
     if anchor_sizes is None:
         anchor_sizes = (
@@ -203,6 +203,7 @@ def run_training(
         return_layers = {
             f'layer{k}': str(v) for v, k in enumerate(returned_layers)
         }
+        return_layers['avgpool'] = 'pool'
         backbone = IntermediateLayerGetter(backbone,
                                            return_layers=return_layers)
 
