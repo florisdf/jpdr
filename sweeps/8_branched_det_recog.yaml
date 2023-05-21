@@ -31,6 +31,8 @@ parameters:
       - 'layer2'
       - 'layer1'
       - 'final_pool'
+      - 'bbox_head'
+      - 'roi_head'
   batch_size_det:
     value: 2
   batch_size_recog:
