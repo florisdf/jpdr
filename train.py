@@ -36,6 +36,7 @@ def run_training(
     backbone_name='resnet18',
     pretrained=True,
     trainable_layers=1,
+    train_branch=True,
     load_ckpt=None,
     save_unique=False,
     save_last=True,
@@ -197,13 +198,13 @@ def run_training(
         )
     else:
         backbone = resnet.__dict__[backbone_name](pretrained=pretrained)
-        freeze_layers(backbone, trainable_layers)
         backbone = torch.nn.Sequential(
             OrderedDict([
                 *(list(backbone.named_children())[:-2]),
                 ('final_pool', nn.MaxPool2d(1, 2, 0)),
             ])
         )
+        freeze_layers(backbone, trainable_layers, train_branch, branch_layer)
 
         # Let the backbone return an OrderedDict with all intermediate feature
         # maps, so that both the detection and recognition branch can choose
@@ -277,7 +278,7 @@ def run_training(
     if use_two_models:
         TrainingSteps = TrainingStepsTwoModels
         recognizer = resnet.__dict__[backbone_name](pretrained=pretrained)
-        freeze_layers(recognizer, trainable_layers)
+        freeze_layers(backbone, trainable_layers, train_branch, branch_layer)
         recognizer = torch.nn.Sequential(
             OrderedDict([
                 *(list(recognizer.named_children())[:-1]),
@@ -345,11 +346,13 @@ def run_training(
     training_loop.run()
 
 
-def freeze_layers(model, trainable_layers):
+def freeze_layers(model, trainable_layers, train_branch, branch_layer):
     layers_to_train = ["layer4", "layer3", "layer2", "layer1", "conv1"][
         :trainable_layers
     ]
     for name, parameter in model.named_parameters():
+        if name == branch_layer and train_branch:
+            break
         if all([not name.startswith(layer) for layer in layers_to_train]):
             parameter.requires_grad_(False)
 
@@ -393,6 +396,12 @@ if __name__ == '__main__':
         '--trainable_layers', default=1,
         help='The number of unfrozen backbone layers.',
         type=int
+    )
+    parser.add_argument(
+        '--train_branch',
+        action='store_true',
+        help='Ensure to train the entire branch, even if these contain more '
+        'backbone layers than the amount set by trainable_layers.'
     )
     parser.add_argument(
         '--load_ckpt', default=None,
@@ -671,6 +680,7 @@ if __name__ == '__main__':
         backbone_name=args.backbone_name,
         pretrained=not args.no_pretrained,
         trainable_layers=args.trainable_layers,
+        train_branch=args.train_branch,
         load_ckpt=args.load_ckpt,
         save_unique=args.save_unique,
         save_best=args.save_best,
