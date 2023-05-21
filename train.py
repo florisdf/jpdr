@@ -3,6 +3,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 import torch
+from torch import nn
 from torch.optim import SGD
 from torchvision.models import resnet
 from torchvision.models._utils import IntermediateLayerGetter
@@ -170,12 +171,12 @@ def run_training(
     if featmap_names_detect is None:
         featmap_names_detect = (
             ['0', '1', '2', '3', 'pool'] if use_fpn
-            else ['branch1.pool' if is_branched_backbone else 'pool']
+            else ['branch1.3' if is_branched_backbone else '3']
         )
     if featmap_names_recog is None:
         featmap_names_recog = (
             ['0', '1', '2', '3', 'pool'] if use_fpn
-            else ['branch2.pool' if is_branched_backbone else 'pool']
+            else ['branch2.3' if is_branched_backbone else '3']
         )
     if anchor_sizes is None:
         anchor_sizes = (
@@ -194,7 +195,8 @@ def run_training(
         freeze_layers(backbone, trainable_layers)
         backbone = torch.nn.Sequential(
             OrderedDict([
-                *(list(backbone.named_children())[:-1]),
+                *(list(backbone.named_children())[:-2]),
+                ('maxpool', nn.MaxPool2d(1, 2, 0)),
             ])
         )
 
@@ -206,8 +208,9 @@ def run_training(
             'layer2': '1',
             'layer3': '2',
             'layer4': '3',
-            'avgpool': 'pool',
+            'maxpool': 'pool',
         }
+
         if is_branched_backbone:
             backbone = ModelBrancher(backbone, return_layers=return_layers,
                                      branch_layer=branch_layer)
