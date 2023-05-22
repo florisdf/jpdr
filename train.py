@@ -163,11 +163,10 @@ def run_training(
         'cuda' if device == 'cuda' and torch.cuda.is_available() else 'cpu'
     )
 
-    if use_fpn:
-        # TODO implement backbone branching for FPN
-        raise NotImplementedError
-
     is_branched_backbone = branch_layer not in ['bbox_head', 'roi_head']
+
+    if is_branched_backbone and use_fpn:
+        raise NotImplementedError
 
     def get_default_featmaps_name(branch, use_fpn):
         if use_fpn:
