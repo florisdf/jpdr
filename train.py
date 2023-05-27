@@ -116,7 +116,7 @@ def run_training(
     # Force FPN level
     force_fpn_level=None,
 
-    branch_layer='bbox_head',
+    branch_layer='roi_head',
 ):
     if sum(int(x) for x in [
             use_split_detect_recog, use_crop_batch_inputs, use_task_specific,
@@ -658,7 +658,7 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        '--branch_layer', default='bbox_head',
+        '--branch_layer', default='roi_head',
         help="Where to split from the common branch into separate detection "
         "and recognition branches. If 'roi_head', the different tasks will "
         "only have different RoI heads. If 'bbox_head', the different BBox "
