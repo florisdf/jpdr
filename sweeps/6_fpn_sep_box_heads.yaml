@@ -4,8 +4,7 @@ method: grid
 entity: jpdr
 project: experiments
 command:
-  - ${env}
-  - ${interpreter}
+  - .venv/bin/python
   - ${program}
   - ${args}
   - '--use_task_specific'

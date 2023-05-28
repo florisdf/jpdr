@@ -3,8 +3,7 @@ method: grid
 entity: jpdr
 project: experiments
 command:
-  - ${env}
-  - ${interpreter}
+  - .venv/bin/python
   - ${program}
   - ${args}
   - '--no_use_fpn'
