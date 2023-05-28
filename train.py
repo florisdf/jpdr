@@ -196,32 +196,11 @@ def run_training(
             trainable_layers=trainable_layers
         )
     else:
-        backbone = resnet.__dict__[backbone_name](pretrained=pretrained)
-        backbone = torch.nn.Sequential(
-            OrderedDict([
-                *(list(backbone.named_children())[:-2]),
-                ('final_pool', nn.MaxPool2d(1, 2, 0)),
-            ])
+        backbone = get_non_fpn_backbone(
+            backbone_name, pretrained, trainable_layers,
+            branch_layer=branch_layer if is_branched_backbone else None,
+            train_branch=train_branch
         )
-        freeze_layers(backbone, trainable_layers, train_branch, branch_layer)
-
-        # Let the backbone return an OrderedDict with all intermediate feature
-        # maps, so that both the detection and recognition branch can choose
-        # which feature map to use
-        return_layers = {
-            'layer1': '0',
-            'layer2': '1',
-            'layer3': '2',
-            'layer4': '3',
-            'final_pool': 'pool',
-        }
-
-        if is_branched_backbone:
-            backbone = ModelBrancher(backbone, return_layers=return_layers,
-                                     branch_layer=branch_layer)
-        else:
-            backbone = IntermediateLayerGetter(backbone,
-                                               return_layers=return_layers)
 
     test_out = backbone(torch.randn((1, 3, 224, 224)))
     detect_out_channels = test_out[featmap_names_detect[0]].shape[1]
@@ -343,6 +322,41 @@ def run_training(
         **training_loop_kwargs
     )
     training_loop.run()
+
+
+def get_non_fpn_backbone(
+    backbone_name, pretrained=True, trainable_layers=1,
+    branch_layer=None,
+    train_branch=True
+):
+    backbone = resnet.__dict__[backbone_name](pretrained=pretrained)
+    backbone = torch.nn.Sequential(
+        OrderedDict([
+            *(list(backbone.named_children())[:-2]),
+            ('final_pool', nn.MaxPool2d(1, 2, 0)),
+        ])
+    )
+    freeze_layers(backbone, trainable_layers, train_branch, branch_layer)
+
+    # Let the backbone return an OrderedDict with all intermediate feature
+    # maps, so that both the detection and recognition branch can choose
+    # which feature map to use
+    return_layers = {
+        'layer1': '0',
+        'layer2': '1',
+        'layer3': '2',
+        'layer4': '3',
+        'final_pool': 'pool',
+    }
+
+    if branch_layer is not None:
+        backbone = ModelBrancher(backbone, return_layers=return_layers,
+                                 branch_layer=branch_layer)
+    else:
+        backbone = IntermediateLayerGetter(backbone,
+                                           return_layers=return_layers)
+
+    return backbone
 
 
 def freeze_layers(model, trainable_layers, train_branch, branch_layer):
