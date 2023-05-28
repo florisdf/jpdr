@@ -144,11 +144,6 @@ def run_training(
     ds_det_train = dl_train_det.dataset
     ds_val = dl_val.dataset
 
-    recog_loss_fn = CrossEntropyLoss(
-        num_train_classes=len(ds_recog_train.label_to_label_idx),
-        embedding_dim=id_embedding_size
-    )
-
     box_labels = set(
         i.item() for ids in ds_det_train.df['target'].apply(
             lambda t: t['labels']
@@ -163,73 +158,31 @@ def run_training(
         'cuda' if device == 'cuda' and torch.cuda.is_available() else 'cpu'
     )
 
-    is_branched_backbone = branch_layer not in ['bbox_head', 'roi_head']
-
-    if is_branched_backbone and use_fpn:
-        raise NotImplementedError
-
-    def get_default_featmaps_name(branch, use_fpn):
-        if use_fpn:
-            return ['0', '1', '2', '3', 'pool']
-        if is_branched_backbone:
-            if branch_layer == 'final_pool':
-                return ['common.3']
-            else:
-                return [f'branch{branch}.3']
-        return ['3']
-
-    if featmap_names_detect is None:
-        featmap_names_detect = get_default_featmaps_name('1', use_fpn)
-    if featmap_names_recog is None:
-        featmap_names_recog = get_default_featmaps_name('2', use_fpn)
-
-    if anchor_sizes is None:
-        anchor_sizes = (
-            [[32], [64], [128], [256], [512]] if use_fpn
-            else [[32, 64, 128, 256, 512]]
-        )
-
-    if use_fpn:
-        backbone = resnet_fpn_backbone(
-            backbone_name=backbone_name,
-            pretrained=pretrained,
-            trainable_layers=trainable_layers
-        )
-    else:
-        backbone = get_non_fpn_backbone(
-            backbone_name, pretrained, trainable_layers,
-            branch_layer=branch_layer if is_branched_backbone else None,
-            train_branch=train_branch
-        )
-
-    test_out = backbone(torch.randn((1, 3, 224, 224)))
-    detect_out_channels = test_out[featmap_names_detect[0]].shape[1]
-    recog_out_channels = test_out[featmap_names_recog[0]].shape[1]
-
-    model = JointRCNN(
-        backbone=backbone,
-        detect_out_channels=detect_out_channels,
-        recog_out_channels=recog_out_channels,
+    model = get_joint_model(
+        num_train_classes=len(ds_recog_train.label_to_label_idx),
+        backbone_name=backbone_name,
+        pretrained=pretrained,
+        trainable_layers=trainable_layers,
         anchor_sizes=anchor_sizes,
         featmap_names_detect=featmap_names_detect,
         featmap_names_recog=featmap_names_recog,
+        branch_layer=branch_layer,
+        use_fpn=use_fpn,
+        train_branch=train_branch,
         box_head_out_channels=box_head_out_channels,
         id_embedding_size=id_embedding_size,
-        recog_loss_fn=recog_loss_fn,
-        # RoI parameters
+        # roi parameters
         roi_output_size=roi_output_size,
-        # Box parameters
+        # box parameters
         box_num_classes=box_num_classes,
         box_fg_iou_thresh=box_fg_iou_thresh,
         box_bg_iou_thresh=box_bg_iou_thresh,
-
         use_recog_loss_on_forward=not (
             use_split_detect_recog
             or use_crop_batch_inputs
         ),
-
-        shared_bbox_head=(branch_layer == 'roi_head'),
     )
+
     if load_ckpt is not None:
         model.load_state_dict(torch.load(load_ckpt))
 
@@ -256,7 +209,7 @@ def run_training(
     if use_two_models:
         TrainingSteps = TrainingStepsTwoModels
         recognizer = resnet.__dict__[backbone_name](pretrained=pretrained)
-        freeze_layers(backbone, trainable_layers, train_branch, branch_layer)
+        freeze_layers(recognizer, trainable_layers, train_branch, branch_layer)
         recognizer = torch.nn.Sequential(
             OrderedDict([
                 *(list(recognizer.named_children())[:-1]),
@@ -266,6 +219,10 @@ def run_training(
             ])
         )
         del training_step_kwargs['model']
+        recog_loss_fn = CrossEntropyLoss(
+            num_train_classes=len(ds_recog_train.label_to_label_idx),
+            embedding_dim=id_embedding_size
+        )
         training_step_kwargs.update(
             dict(
                 detector=model.to(device),
@@ -322,6 +279,98 @@ def run_training(
         **training_loop_kwargs
     )
     training_loop.run()
+
+
+def get_joint_model(
+    num_train_classes,
+    backbone_name='resnet18',
+    pretrained=True,
+    trainable_layers=1,
+    anchor_sizes=None,
+    featmap_names_detect=None,
+    featmap_names_recog=None,
+    branch_layer='roi_head',
+    use_fpn=True,
+    train_branch=True,
+    box_head_out_channels=1024,
+    id_embedding_size=512,
+    # roi parameters
+    roi_output_size=14,
+    # box parameters
+    box_fg_iou_thresh=0.5,
+    box_bg_iou_thresh=0.5,
+    use_recog_loss_on_forward=False,
+    box_num_classes=2,
+):
+    is_branched_backbone = branch_layer not in ['bbox_head', 'roi_head']
+
+    if is_branched_backbone and use_fpn:
+        raise NotImplementedError
+
+    def get_default_featmaps_name(branch, use_fpn):
+        if use_fpn:
+            return ['0', '1', '2', '3', 'pool']
+        if is_branched_backbone:
+            if branch_layer == 'final_pool':
+                return ['common.3']
+            else:
+                return [f'branch{branch}.3']
+        return ['3']
+
+    if featmap_names_detect is None:
+        featmap_names_detect = get_default_featmaps_name('1', use_fpn)
+    if featmap_names_recog is None:
+        featmap_names_recog = get_default_featmaps_name('2', use_fpn)
+
+    if anchor_sizes is None:
+        anchor_sizes = (
+            [[32], [64], [128], [256], [512]] if use_fpn
+            else [[32, 64, 128, 256, 512]]
+        )
+
+    if use_fpn:
+        backbone = resnet_fpn_backbone(
+            backbone_name=backbone_name,
+            pretrained=pretrained,
+            trainable_layers=trainable_layers
+        )
+    else:
+        backbone = get_non_fpn_backbone(
+            backbone_name, pretrained, trainable_layers,
+            branch_layer=branch_layer if is_branched_backbone else None,
+            train_branch=train_branch
+        )
+
+    recog_loss_fn = CrossEntropyLoss(
+        num_train_classes=num_train_classes,
+        embedding_dim=id_embedding_size
+    )
+
+    test_out = backbone(torch.randn((1, 3, 224, 224)))
+    detect_out_channels = test_out[featmap_names_detect[0]].shape[1]
+    recog_out_channels = test_out[featmap_names_recog[0]].shape[1]
+
+    return JointRCNN(
+        backbone=backbone,
+        detect_out_channels=detect_out_channels,
+        recog_out_channels=recog_out_channels,
+        anchor_sizes=anchor_sizes,
+        featmap_names_detect=featmap_names_detect,
+        featmap_names_recog=featmap_names_recog,
+        box_head_out_channels=box_head_out_channels,
+        id_embedding_size=id_embedding_size,
+        recog_loss_fn=recog_loss_fn,
+        # roi parameters
+        roi_output_size=roi_output_size,
+        # box parameters
+        box_num_classes=box_num_classes,
+        box_fg_iou_thresh=box_fg_iou_thresh,
+        box_bg_iou_thresh=box_bg_iou_thresh,
+
+        use_recog_loss_on_forward=use_recog_loss_on_forward,
+
+        shared_bbox_head=(branch_layer == 'roi_head'),
+    )
 
 
 def get_non_fpn_backbone(
