@@ -2,9 +2,8 @@ import pandas as pd
 import torch
 from time import time
 from torchvision.transforms import functional as F
-from tqdm.notebook import tqdm
-from itertools import product
-from random import shuffle
+
+from mock_num_detections import mock_num_detections
 
 
 def get_sku_mean_width_heights():
@@ -42,7 +41,9 @@ def random_tfm_crop_boxes(
     tfm_box_height = int(orig_box_height * tfm_y_scale)
 
     crop_boxes_x1 = torch.randint(tfm_im_width - tfm_box_width, (num_boxes, 1))
-    crop_boxes_y1 = torch.randint(tfm_im_height - tfm_box_height, (num_boxes, 1))
+    crop_boxes_y1 = torch.randint(
+        tfm_im_height - tfm_box_height, (num_boxes, 1)
+    )
 
     return torch.hstack([
         crop_boxes_x1,
@@ -59,6 +60,9 @@ def time_separate_det_recog_nets(
     recog_input_size,
     dets_per_img,
 ):
+    mock_num_detections(dets_per_img)
+    faster_rcnn = faster_rcnn.eval()
+    rn50 = rn50.eval()
     faster_rcnn.to(device)
     rn50.to(device)
     x = torch.randn((1, 3, det_input_size, det_input_size)).to(device)
@@ -103,18 +107,20 @@ def time_separate_det_recog_nets(
 
 def time_joint_det_recog(
     faster_rcnn, recog_head, device,
-    det_input_size,
+    det_input_size, dets_per_img
 ):
+    mock_num_detections(dets_per_img)
     faster_rcnn.to(device)
     recog_head.to(device)
+    faster_rcnn = faster_rcnn.eval()
+    recog_head = recog_head.eval()
     x = torch.randn((1, 3, det_input_size, det_input_size)).to(device)
-    features = torch.randn((faster_rcnn.rpn.post_nms_top_n(),
-                            recog_head.in_features)).to(device)
+    features = torch.randn((dets_per_img, recog_head.in_features)).to(device)
 
     start = time()
 
     with torch.no_grad():
-        out = faster_rcnn(x)
+        faster_rcnn(x)
         recog_head(features)
 
     end = time()
@@ -124,13 +130,15 @@ def time_joint_det_recog(
 
 def time_model(
     model, device, input_size,
+    dets_per_img
 ):
     model.to(device)
+    model = model.eval()
     x = torch.randn((1, 3, input_size, input_size)).to(device)
     start = time()
 
     with torch.no_grad():
-        out = model(x)
+        model(x)
 
     end = time()
 
